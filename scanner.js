@@ -21,8 +21,119 @@ const MessageScanner = {
         return false;
     },
 
+    // Handle ECDH key exchange message
+    handleECDHMessage: async (payload, bubble) => {
+        try {
+            const chatId = ShieldStorage.getCurrentChatId();
+            if (!chatId) return false;
+
+            const peerPublicKeyB64 = payload.pk;
+            if (!peerPublicKeyB64) return false;
+
+            // Check if we already have this peer's key
+            const ecdhData = await ShieldStorage.getECDHData();
+            if (ecdhData && ecdhData.peerPublicKey === peerPublicKeyB64) {
+                // Already have this key, just show indicator
+                MessageScanner.renderECDHMessage(bubble, 'received', peerPublicKeyB64);
+                return true;
+            }
+
+            // Save peer's public key
+            await ShieldStorage.setPeerPublicKey(peerPublicKeyB64);
+
+            // Generate fingerprint for display
+            const fingerprint = await ECDHEngine.generateFingerprint(peerPublicKeyB64);
+
+            // Check if we can derive shared secret now
+            const updatedEcdhData = await ShieldStorage.getECDHData();
+            if (updatedEcdhData && updatedEcdhData.myPrivateKey && updatedEcdhData.peerPublicKey) {
+                // We have both keys, derive shared secret
+                const privateKey = await ECDHEngine.importPrivateKey(updatedEcdhData.myPrivateKey);
+                const peerPublicKey = await ECDHEngine.importPublicKey(updatedEcdhData.peerPublicKey);
+
+                if (privateKey && peerPublicKey) {
+                    const sharedSecret = await ECDHEngine.deriveSharedSecret(privateKey, peerPublicKey);
+
+                    if (sharedSecret) {
+                        // Set shared secret as chat password
+                        await ShieldStorage.setChatPassword(sharedSecret);
+                        await ShieldStorage.setKeyMode('auto');
+
+                        ShieldState.isActive = true;
+                        if (typeof ShieldUI !== 'undefined') {
+                            ShieldUI.updateIndicator(true);
+                            ShieldUI.updateEmojiButton(true);
+                            ShieldUI.updateToggleButton(true);
+                            ShieldUI.updateKeyModeDisplay();
+                            ShieldUI.toast(`🔐 Ключи согласованы! [${fingerprint}]`);
+                        }
+
+                        // Re-scan messages with new key
+                        setTimeout(() => {
+                            if (typeof scanMessages === 'function') {
+                                scanMessages();
+                            }
+                        }, 500);
+                    }
+                }
+            } else {
+                // We received peer's key but haven't sent ours yet
+                if (typeof ShieldUI !== 'undefined') {
+                    ShieldUI.toast(`🔑 Получен ключ [${fingerprint}]. Отправьте свой!`);
+                    ShieldUI.updateKeyModeDisplay();
+                }
+            }
+
+            MessageScanner.renderECDHMessage(bubble, 'received', peerPublicKeyB64);
+            return true;
+        } catch (e) {
+            console.error("[Shield] handleECDHMessage Error:", e);
+            return false;
+        }
+    },
+
+    // Render ECDH key exchange message
+    renderECDHMessage: async (bubble, type, publicKeyB64) => {
+        const fingerprint = await ECDHEngine.generateFingerprint(publicKeyB64);
+        const originalText = bubble.innerText;
+
+        bubble.innerHTML = '';
+        bubble.dataset.msDecrypted = 'ecdh';
+        bubble.dataset.msOriginal = originalText;
+
+        const container = document.createElement('div');
+        container.className = 'ms-ecdh-container';
+        container.style.cssText = `
+            padding: 8px 12px;
+            background: linear-gradient(135deg, rgba(0,100,255,0.1), rgba(0,200,100,0.1));
+            border-radius: 8px;
+            border: 1px solid rgba(0,150,255,0.3);
+        `;
+
+        const icon = type === 'received' ? '📥' : '📤';
+        const label = type === 'received' ? 'Получен ключ' : 'Отправлен ключ';
+
+        container.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px;">${icon}</span>
+                <div>
+                    <div style="color: #0af; font-size: 11px; font-weight: bold;">🔐 ECDH ${label}</div>
+                    <div style="color: #888; font-size: 10px; font-family: monospace;">
+                        Fingerprint: ${fingerprint}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        bubble.appendChild(container);
+    },
+
     scan: async () => {
-        if (!ShieldState.isActive) return;
+        if (!ShieldState.isActive) {
+            // Even if not active, scan for ECDH key exchange messages
+            await MessageScanner.scanForECDH();
+            return;
+        }
 
         const bubbles = document.querySelectorAll(ShieldSelectors.BUBBLE_TEXT);
 
@@ -33,6 +144,14 @@ const MessageScanner = {
 
             const isEncrypted = await MessageScanner.isEncryptedMessage(text);
             if (isEncrypted) {
+                // First check if it's an ECDH message
+                const payload = await CryptoEngine.parsePayloadAsync(text);
+                if (payload && payload.t === 'ecdh') {
+                    bubble.dataset.msDecrypted = "ecdh";
+                    await MessageScanner.handleECDHMessage(payload, bubble);
+                    continue;
+                }
+
                 bubble.dataset.msDecrypted = "pending";
 
                 const password = await ShieldStorage.getChatPassword();
@@ -45,6 +164,26 @@ const MessageScanner = {
                     bubble.dataset.msDecrypted = "true";
                 } else {
                     bubble.removeAttribute('data-ms-decrypted');
+                }
+            }
+        }
+    },
+
+    // Scan only for ECDH messages (when encryption is not active)
+    scanForECDH: async () => {
+        const bubbles = document.querySelectorAll(ShieldSelectors.BUBBLE_TEXT);
+
+        for (const bubble of bubbles) {
+            if (bubble.dataset.msDecrypted) continue;
+
+            const text = bubble.innerText;
+            const isEncrypted = await MessageScanner.isEncryptedMessage(text);
+
+            if (isEncrypted) {
+                const payload = await CryptoEngine.parsePayloadAsync(text);
+                if (payload && payload.t === 'ecdh') {
+                    bubble.dataset.msDecrypted = "ecdh";
+                    await MessageScanner.handleECDHMessage(payload, bubble);
                 }
             }
         }

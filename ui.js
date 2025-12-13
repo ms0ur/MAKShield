@@ -38,8 +38,40 @@ const ShieldUI = {
                     🎭
                 </button>
             </div>
+            <div id="ms-key-mode-info" style="font-size: 9px; color: #888; text-align: center; margin-bottom: 2px;">
+                <span id="ms-key-mode-status">🔑 Нет ключа</span>
+            </div>
             <div id="ms-spoof-info" style="font-size: 9px; color: #888; text-align: center;">
                 <span id="ms-spoof-name">Wildberries</span>
+            </div>
+        </div>
+        <div id="ms-key-menu" style="display: none;">
+            <div class="ms-spoof-title">🔐 Режим ключей</div>
+            <div class="ms-key-mode-tabs">
+                <button class="ms-key-tab active" data-mode="manual">🔑 Ручной</button>
+                <button class="ms-key-tab" data-mode="auto">🔄 Авто (ECDH)</button>
+            </div>
+            <div id="ms-key-mode-manual" class="ms-key-panel">
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Пароль для чата</label>
+                    <input type="text" class="ms-modal-input" id="ms-manual-password" placeholder="Введите пароль...">
+                </div>
+                <div class="ms-modal-buttons">
+                    <button class="ms-modal-btn" id="ms-manual-remove">🗑️ Удалить</button>
+                    <button class="ms-modal-btn primary" id="ms-manual-save">💾 Сохранить</button>
+                </div>
+            </div>
+            <div id="ms-key-mode-auto" class="ms-key-panel" style="display: none;">
+                <div id="ms-ecdh-status" style="text-align: center; padding: 8px; margin-bottom: 10px; border-radius: 8px; background: rgba(0,0,0,0.2);">
+                    <div id="ms-ecdh-status-icon" style="font-size: 24px;">🔓</div>
+                    <div id="ms-ecdh-status-text" style="font-size: 11px; color: #888;">Ключи не согласованы</div>
+                    <div id="ms-ecdh-fingerprint" style="font-size: 10px; color: #666; font-family: monospace;"></div>
+                </div>
+                <button class="ms-modal-btn primary" id="ms-ecdh-send" style="width: 100%;">📤 Отправить публичный ключ</button>
+                <div style="font-size: 9px; color: #666; text-align: center; margin-top: 8px;">
+                    Оба участника должны отправить свои ключи
+                </div>
+                <button class="ms-modal-btn" id="ms-ecdh-reset" style="width: 100%; margin-top: 8px;">🔄 Сбросить ключи</button>
             </div>
         </div>
         <div id="ms-spoof-menu" style="display: none;">
@@ -206,6 +238,46 @@ const ShieldUI = {
                 background: rgba(255,200,0,0.2) !important;
                 border-color: #885 !important;
             }
+            /* Key Menu Styles */
+            #ms-key-menu {
+                background: rgba(20, 25, 20, 0.95);
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 12px;
+                min-width: 260px;
+            }
+            .ms-key-mode-tabs {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 12px;
+            }
+            .ms-key-tab {
+                flex: 1;
+                padding: 8px 12px !important;
+                font-size: 11px !important;
+                border-radius: 8px !important;
+                background: rgba(255,255,255,0.05) !important;
+                border: 1px solid #333 !important;
+                color: #888 !important;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .ms-key-tab:hover {
+                background: rgba(255,255,255,0.1) !important;
+                color: #fff !important;
+            }
+            .ms-key-tab.active {
+                background: rgba(0,255,0,0.15) !important;
+                border-color: #0a0 !important;
+                color: #0f0 !important;
+            }
+            .ms-key-panel {
+                animation: msFadeIn 0.2s ease;
+            }
+            @keyframes msFadeIn {
+                from { opacity: 0; transform: translateY(-5px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
             .ms-toast {
                 position: fixed;
                 bottom: 20px;
@@ -343,6 +415,7 @@ const ShieldUI = {
             ShieldUI.isMinimized = !ShieldUI.isMinimized;
             if (ShieldUI.isMinimized) {
                 document.getElementById('ms-spoof-menu').style.display = 'none';
+                document.getElementById('ms-key-menu').style.display = 'none';
             }
         };
 
@@ -353,30 +426,77 @@ const ShieldUI = {
                 return;
             }
 
-            const chatData = await ShieldStorage.getChatData();
-            const currentKey = chatData?.key || '';
+            // Toggle key menu
+            ShieldUI.toggleKeyMenu();
+        };
 
-            const pass = prompt(`🔐 Ключ для чата #${chatId}\n(Пустое = удалить):`, currentKey);
+        // Key menu tab switching
+        document.querySelectorAll('.ms-key-tab').forEach(tab => {
+            tab.onclick = () => {
+                document.querySelectorAll('.ms-key-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
 
-            if (pass === null) return;
+                const mode = tab.dataset.mode;
+                document.getElementById('ms-key-mode-manual').style.display = mode === 'manual' ? 'block' : 'none';
+                document.getElementById('ms-key-mode-auto').style.display = mode === 'auto' ? 'block' : 'none';
 
-            if (pass === "") {
-                await ShieldStorage.removeChatPassword();
-                ShieldState.isActive = false;
-                ShieldUI.updateIndicator(false);
-                ShieldUI.updateEmojiButton(false);
-                ShieldUI.toast('Ключ удалён', 'error');
-            } else {
-                await ShieldStorage.setChatPassword(pass);
-                ShieldState.isActive = true;
-                ShieldUI.updateIndicator(true);
-                ShieldUI.updateEmojiButton(true);
-                ShieldUI.toast(`Ключ установлен для чата #${chatId}! 🛡️`);
-
-                if (typeof scanMessages === 'function') {
-                    scanMessages();
+                if (mode === 'auto') {
+                    ShieldUI.updateECDHStatus();
                 }
+            };
+        });
+
+        // Manual mode - save password
+        document.getElementById('ms-manual-save').onclick = async () => {
+            const pass = document.getElementById('ms-manual-password').value.trim();
+            if (!pass) {
+                ShieldUI.toast('Введите пароль!', 'error');
+                return;
             }
+
+            await ShieldStorage.setChatPassword(pass);
+            await ShieldStorage.setKeyMode('manual');
+            ShieldState.isActive = true;
+            ShieldUI.updateIndicator(true);
+            ShieldUI.updateEmojiButton(true);
+            ShieldUI.updateToggleButton(true);
+            ShieldUI.updateKeyModeDisplay();
+            document.getElementById('ms-key-menu').style.display = 'none';
+            ShieldUI.toast('🔑 Ручной ключ установлен!');
+
+            if (typeof scanMessages === 'function') {
+                scanMessages();
+            }
+        };
+
+        // Manual mode - remove password
+        document.getElementById('ms-manual-remove').onclick = async () => {
+            await ShieldStorage.removeChatPassword();
+            await ShieldStorage.clearECDHData();
+            ShieldState.isActive = false;
+            ShieldUI.updateIndicator(false);
+            ShieldUI.updateEmojiButton(false);
+            ShieldUI.updateKeyModeDisplay();
+            document.getElementById('ms-manual-password').value = '';
+            document.getElementById('ms-key-menu').style.display = 'none';
+            ShieldUI.toast('Ключ удалён', 'error');
+        };
+
+        // Auto mode - send ECDH public key
+        document.getElementById('ms-ecdh-send').onclick = async () => {
+            await ShieldUI.sendECDHKey();
+        };
+
+        // Auto mode - reset ECDH keys
+        document.getElementById('ms-ecdh-reset').onclick = async () => {
+            await ShieldStorage.clearECDHData();
+            await ShieldStorage.removeChatPassword();
+            ShieldState.isActive = false;
+            ShieldUI.updateIndicator(false);
+            ShieldUI.updateEmojiButton(false);
+            ShieldUI.updateKeyModeDisplay();
+            ShieldUI.updateECDHStatus();
+            ShieldUI.toast('ECDH ключи сброшены', 'error');
         };
 
         toggleBtn.onclick = async () => {
@@ -418,9 +538,201 @@ const ShieldUI = {
         }, 500);
     },
 
+    // Toggle key menu visibility
+    toggleKeyMenu: async () => {
+        const menu = document.getElementById('ms-key-menu');
+        const spoofMenu = document.getElementById('ms-spoof-menu');
+        const isVisible = menu.style.display !== 'none';
+
+        spoofMenu.style.display = 'none';
+
+        if (isVisible) {
+            menu.style.display = 'none';
+        } else {
+            // Load current password if exists
+            const chatData = await ShieldStorage.getChatData();
+            const keyMode = await ShieldStorage.getKeyMode();
+
+            if (keyMode === 'manual' && chatData?.key) {
+                document.getElementById('ms-manual-password').value = chatData.key;
+            } else {
+                document.getElementById('ms-manual-password').value = '';
+            }
+
+            // Set active tab based on current mode
+            document.querySelectorAll('.ms-key-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.mode === keyMode);
+            });
+            document.getElementById('ms-key-mode-manual').style.display = keyMode === 'manual' ? 'block' : 'none';
+            document.getElementById('ms-key-mode-auto').style.display = keyMode === 'auto' ? 'block' : 'none';
+
+            await ShieldUI.updateECDHStatus();
+            menu.style.display = 'block';
+        }
+    },
+
+    // Send ECDH public key
+    sendECDHKey: async () => {
+        const chatId = ShieldStorage.getCurrentChatId();
+        if (!chatId) {
+            ShieldUI.toast('Откройте чат!', 'error');
+            return;
+        }
+
+        try {
+            // Check if we already have a key pair
+            let ecdhData = await ShieldStorage.getECDHData();
+            let publicKeyB64;
+
+            if (ecdhData && ecdhData.myPublicKey && ecdhData.myPrivateKey) {
+                // Reuse existing key pair
+                publicKeyB64 = ecdhData.myPublicKey;
+            } else {
+                // Generate new key pair
+                const keyPair = await ECDHEngine.generateKeyPair();
+                if (!keyPair) {
+                    ShieldUI.toast('Ошибка генерации ключей!', 'error');
+                    return;
+                }
+
+                publicKeyB64 = await ECDHEngine.exportPublicKey(keyPair.publicKey);
+                const privateKeyJWK = await ECDHEngine.exportPrivateKey(keyPair.privateKey);
+
+                if (!publicKeyB64 || !privateKeyJWK) {
+                    ShieldUI.toast('Ошибка экспорта ключей!', 'error');
+                    return;
+                }
+
+                await ShieldStorage.setECDHKeyPair(publicKeyB64, privateKeyJWK);
+                await ShieldStorage.setKeyMode('auto');
+            }
+
+            // Create ECDH message
+            const ecdhMessage = await CryptoEngine.createECDHKeyMessage(publicKeyB64);
+            if (!ecdhMessage) {
+                ShieldUI.toast('Ошибка создания сообщения!', 'error');
+                return;
+            }
+
+            // Insert into editor and send
+            const editor = document.querySelector(ShieldSelectors.EDITOR);
+            if (!editor) {
+                ShieldUI.toast('Редактор не найден!', 'error');
+                return;
+            }
+
+            SendHandler.insertIntoEditor(editor, ecdhMessage);
+
+            setTimeout(() => {
+                const btn = document.querySelector(ShieldSelectors.SEND_BTN);
+                if (btn) btn.click();
+            }, 100);
+
+            const fingerprint = await ECDHEngine.generateFingerprint(publicKeyB64);
+            ShieldUI.toast(`📤 Ключ отправлен [${fingerprint}]`);
+            ShieldUI.updateECDHStatus();
+            ShieldUI.updateKeyModeDisplay();
+
+            // Check if we can already derive shared secret
+            ecdhData = await ShieldStorage.getECDHData();
+            if (ecdhData && ecdhData.myPrivateKey && ecdhData.peerPublicKey) {
+                const privateKey = await ECDHEngine.importPrivateKey(ecdhData.myPrivateKey);
+                const peerPublicKey = await ECDHEngine.importPublicKey(ecdhData.peerPublicKey);
+
+                if (privateKey && peerPublicKey) {
+                    const sharedSecret = await ECDHEngine.deriveSharedSecret(privateKey, peerPublicKey);
+
+                    if (sharedSecret) {
+                        await ShieldStorage.setChatPassword(sharedSecret);
+                        ShieldState.isActive = true;
+                        ShieldUI.updateIndicator(true);
+                        ShieldUI.updateEmojiButton(true);
+                        ShieldUI.updateToggleButton(true);
+                        ShieldUI.updateKeyModeDisplay();
+                        ShieldUI.toast('🔐 Ключи согласованы!');
+
+                        setTimeout(() => {
+                            if (typeof scanMessages === 'function') {
+                                scanMessages();
+                            }
+                        }, 500);
+                    }
+                }
+            }
+
+        } catch (e) {
+            console.error("[Shield] sendECDHKey Error:", e);
+            ShieldUI.toast('Ошибка отправки ключа!', 'error');
+        }
+    },
+
+    // Update ECDH status display
+    updateECDHStatus: async () => {
+        const ecdhData = await ShieldStorage.getECDHData();
+        const statusIcon = document.getElementById('ms-ecdh-status-icon');
+        const statusText = document.getElementById('ms-ecdh-status-text');
+        const fingerprint = document.getElementById('ms-ecdh-fingerprint');
+        const sendBtn = document.getElementById('ms-ecdh-send');
+
+        if (!ecdhData || !ecdhData.myPublicKey) {
+            statusIcon.textContent = '🔓';
+            statusText.textContent = 'Ключи не созданы';
+            statusText.style.color = '#888';
+            fingerprint.textContent = '';
+            sendBtn.textContent = '📤 Отправить публичный ключ';
+        } else if (!ecdhData.peerPublicKey) {
+            statusIcon.textContent = '⏳';
+            statusText.textContent = 'Ожидание ключа собеседника';
+            statusText.style.color = '#fa0';
+            const fp = await ECDHEngine.generateFingerprint(ecdhData.myPublicKey);
+            fingerprint.textContent = `Ваш: ${fp}`;
+            sendBtn.textContent = '📤 Отправить ещё раз';
+        } else {
+            statusIcon.textContent = '🔐';
+            statusText.textContent = 'Ключи согласованы!';
+            statusText.style.color = '#0f0';
+            const myFp = await ECDHEngine.generateFingerprint(ecdhData.myPublicKey);
+            const peerFp = await ECDHEngine.generateFingerprint(ecdhData.peerPublicKey);
+            fingerprint.textContent = `Ваш: ${myFp} | Партнёр: ${peerFp}`;
+            sendBtn.textContent = '📤 Отправить ещё раз';
+        }
+    },
+
+    // Update key mode display in panel
+    updateKeyModeDisplay: async () => {
+        const statusEl = document.getElementById('ms-key-mode-status');
+        if (!statusEl) return;
+
+        const chatData = await ShieldStorage.getChatData();
+        const keyMode = await ShieldStorage.getKeyMode();
+        const ecdhStatus = await ShieldStorage.getECDHStatus();
+
+        if (!chatData || !chatData.key) {
+            statusEl.textContent = '🔑 Нет ключа';
+            statusEl.style.color = '#888';
+        } else if (keyMode === 'auto') {
+            if (ecdhStatus === 'complete') {
+                statusEl.textContent = '🔐 ECDH ключи';
+                statusEl.style.color = '#0af';
+            } else if (ecdhStatus === 'waiting') {
+                statusEl.textContent = '⏳ Ожидание ключа';
+                statusEl.style.color = '#fa0';
+            } else {
+                statusEl.textContent = '🔄 ECDH режим';
+                statusEl.style.color = '#888';
+            }
+        } else {
+            statusEl.textContent = '🔑 Ручной ключ';
+            statusEl.style.color = '#0f0';
+        }
+    },
+
     toggleSpoofMenu: async () => {
         const menu = document.getElementById('ms-spoof-menu');
+        const keyMenu = document.getElementById('ms-key-menu');
         const isVisible = menu.style.display !== 'none';
+
+        keyMenu.style.display = 'none';
 
         if (isVisible) {
             menu.style.display = 'none';
@@ -559,6 +871,10 @@ const ShieldUI = {
     onChatChanged: async (chatId) => {
         document.getElementById('ms-chat-id').textContent = chatId || '---';
 
+        // Close menus on chat change
+        document.getElementById('ms-key-menu').style.display = 'none';
+        document.getElementById('ms-spoof-menu').style.display = 'none';
+
         const chatData = await ShieldStorage.getChatData(chatId);
         const hasKey = chatData && chatData.key;
         const isEnabled = chatData && chatData.enabled;
@@ -567,9 +883,15 @@ const ShieldUI = {
         ShieldUI.updateIndicator(isEnabled);
         ShieldUI.updateEmojiButton(isEnabled);
         ShieldUI.updateToggleButton(isEnabled);
+        ShieldUI.updateKeyModeDisplay();
 
         if (isEnabled && typeof scanMessages === 'function') {
             scanMessages();
+        } else {
+            // Still scan for ECDH key messages even when not enabled
+            if (typeof MessageScanner !== 'undefined' && MessageScanner.scanForECDH) {
+                MessageScanner.scanForECDH();
+            }
         }
     },
 
@@ -602,6 +924,7 @@ const ShieldUI = {
         ShieldUI.updateIndicator(isEnabled);
         ShieldUI.updateEmojiButton(isEnabled);
         ShieldUI.updateToggleButton(isEnabled);
+        ShieldUI.updateKeyModeDisplay();
     },
 
     updateIndicator: (active) => {

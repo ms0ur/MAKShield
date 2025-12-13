@@ -19,6 +19,7 @@ MAKShield is a browser extension that adds end-to-end encryption to MAX Messenge
 
 - 🔐 **AES-256-GCM Encryption** - Military-grade encryption using Web Crypto API
 - 🔑 **PBKDF2 Key Derivation** - Secure password-based key generation with 100,000 iterations
+- 🔄 **ECDH Key Exchange** - Automatic secure key exchange using Elliptic Curve Diffie-Hellman (P-256)
 - 💬 **Per-Chat Keys** - Set different encryption keys for different conversations
 - 🎭 **Message Disguise** - Encrypted messages appear as regular URLs or log entries
 - 🔒 **Local-Only Storage** - All keys stored locally using browser storage API
@@ -36,10 +37,18 @@ MAKShield is a browser extension that adds end-to-end encryption to MAX Messenge
 
 ### How It Works
 
-1. **Set a key** for your chat using the KEY button
-2. **Type your message** normally
-3. **Send** - the message is automatically encrypted and disguised
-4. **Receive** - encrypted messages are automatically decrypted if you have the key
+#### Manual Mode (Password)
+1. **Set a key** for your chat using the KEY button → Manual tab
+2. **Share the password** with your contact through a secure channel
+3. **Type your message** normally
+4. **Send** - the message is automatically encrypted and disguised
+
+#### Auto Mode (ECDH Key Exchange)
+1. Click **KEY** button → **Auto (ECDH)** tab
+2. Click **"Send Public Key"** - your key is sent disguised as a regular message
+3. **Wait** for your contact to send their key
+4. Once both keys are exchanged, **encryption activates automatically**
+5. Verify fingerprints with your contact to ensure no MITM attack
 
 ### Privacy & Data
 
@@ -52,7 +61,8 @@ MAKShield is a browser extension that adds end-to-end encryption to MAX Messenge
 - ✅ **Open source** - All code is readable and auditable
 
 **What is stored locally:**
-- Encryption keys for each chat (set by you)
+- Encryption keys for each chat (set by you or derived via ECDH)
+- ECDH key pairs for automatic key exchange
 - Selected disguise preset preference
 - Custom disguise templates (if created)
 
@@ -68,6 +78,7 @@ MAKShield is a browser extension that adds end-to-end encryption to MAX Messenge
 |---------|----------------|
 | Encryption | AES-256-GCM |
 | Key Derivation | PBKDF2-SHA256 (100k iterations) |
+| Key Exchange | ECDH P-256 (secp256r1) |
 | Salt | Random 16 bytes per message |
 | IV | Random 12 bytes per message |
 | API | Web Crypto API (SubtleCrypto) |
@@ -106,6 +117,7 @@ MAKShield - это расширение браузера, добавляющее
 
 - 🔐 **Шифрование AES-256-GCM** - Шифрование военного уровня с использованием Web Crypto API
 - 🔑 **Деривация ключей PBKDF2** - Безопасная генерация ключей на основе пароля с 100,000 итерациями
+- 🔄 **Обмен ключами ECDH** - Автоматический безопасный обмен ключами через ECDH (P-256)
 - 💬 **Отдельные ключи для чатов** - Устанавливайте разные ключи шифрования для разных бесед
 - 🎭 **Маскировка сообщений** - Зашифрованные сообщения выглядят как обычные URL или логи
 - 🔒 **Только локальное хранение** - Все ключи хранятся локально через API хранилища браузера
@@ -123,10 +135,18 @@ MAKShield - это расширение браузера, добавляющее
 
 ### Как это работает
 
-1. **Установите ключ** для чата кнопкой KEY
-2. **Напишите сообщение** как обычно
-3. **Отправьте** - сообщение автоматически зашифруется и замаскируется
-4. **Получите** - зашифрованные сообщения автоматически расшифруются, если у вас есть ключ
+#### Ручной режим (Пароль)
+1. **Установите ключ** для чата кнопкой KEY → вкладка "Ручной"
+2. **Поделитесь паролем** с собеседником через безопасный канал
+3. **Напишите сообщение** как обычно
+4. **Отправьте** - сообщение автоматически зашифруется и замаскируется
+
+#### Авто режим (ECDH обмен ключами)
+1. Нажмите **KEY** → вкладка **"Авто (ECDH)"**
+2. Нажмите **"Отправить публичный ключ"** - ключ отправится замаскированным под обычное сообщение
+3. **Дождитесь** пока собеседник отправит свой ключ
+4. После обмена ключами **шифрование активируется автоматически**
+5. Сверьте fingerprint-ы с собеседником для защиты от MITM-атак
 
 ### Конфиденциальность и данные
 
@@ -139,7 +159,8 @@ MAKShield - это расширение браузера, добавляющее
 - ✅ **Открытый исходный код** - Весь код читаем и проверяем
 
 **Что хранится локально:**
-- Ключи шифрования для каждого чата (установленные вами)
+- Ключи шифрования для каждого чата (установленные вами или полученные через ECDH)
+- ECDH ключевые пары для автоматического обмена ключами
 - Выбранный пресет маскировки
 - Пользовательские шаблоны маскировки (если созданы)
 
@@ -155,6 +176,7 @@ MAKShield - это расширение браузера, добавляющее
 |---------|------------|
 | Шифрование | AES-256-GCM |
 | Деривация ключей | PBKDF2-SHA256 (100k итераций) |
+| Обмен ключами | ECDH P-256 (secp256r1) |
 | Соль | Случайные 16 байт на сообщение |
 | IV | Случайные 12 байт на сообщение |
 | API | Web Crypto API (SubtleCrypto) |
