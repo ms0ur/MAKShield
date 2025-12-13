@@ -1,15 +1,22 @@
 {
   "manifest_version": 2,
-  "name": "MAX Shield V4.1",
-  "version": "4.1.0",
-  "description": "E2E Encryption for MAX Messenger - Per-Chat Keys",
-  "author": "ms0ur & Gemini & Claude",
+  "name": "MAKShield",
+  "version": "0.2.4",
+  "description": "E2E Encryption for MAX Messenger (WEB). All encryption happens locally - no data is collected or transmitted to external servers.",
+  "author": "ms0ur",
+  "homepage_url": "https://github.com/ms0ur/MakShield",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "makshield@ms0ur",
+      "strict_min_version": "57.0"
+    }
+  },
   "permissions": [
     "storage",
     "https://web.max.ru/*"
   ],
   "web_accessible_resources": [
-    "icon.png"
+    "maksicon.png"
   ],
   "content_scripts": [
     {

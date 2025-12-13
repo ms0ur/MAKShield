@@ -5,7 +5,7 @@ const ShieldUI = {
     init: () => {
         if (document.getElementById('ms-overlay')) return;
 
-        const iconUrl = chrome.runtime.getURL('icon.png');
+        const iconUrl = chrome.runtime.getURL('maksbanner.png');
 
         const panel = document.createElement('div');
         panel.id = 'ms-overlay';
@@ -21,7 +21,7 @@ const ShieldUI = {
     },
 
     getTemplate: (iconUrl) => `
-        <img id="ms-logo" src="${iconUrl}" alt="Shield" title="MAX Shield">
+        <img id="ms-logo" src="${iconUrl}" alt="Shield" title="MAKShield">
         <div id="ms-controls">
             <div id="ms-chat-info" style="font-size: 10px; color: #666; text-align: center; margin-bottom: 4px;">
                 Chat: <span id="ms-chat-id">---</span>
@@ -77,13 +77,14 @@ const ShieldUI = {
         const style = document.createElement('style');
         style.textContent = `
             #ms-overlay #ms-logo {
-                width: 100px;
-                height: 100px;
+                width: 140px;
+                height: 70px;
                 cursor: pointer;
                 opacity: 0.95;
                 transition: transform 0.2s, opacity 0.2s;
-                border-radius: 16px;
+                border-radius: 12px;
                 filter: drop-shadow(0 2px 8px rgba(0,255,0,0.2));
+                object-fit: contain;
             }
             #ms-overlay #ms-logo:hover {
                 transform: scale(1.05);

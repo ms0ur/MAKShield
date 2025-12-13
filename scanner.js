@@ -64,7 +64,7 @@ const MessageScanner = {
         const lockIcon = document.createElement('span');
         lockIcon.className = 'ms-lock-icon';
         lockIcon.textContent = '🔒';
-        lockIcon.title = '✅ Расшифровано MAX Shield\n🔐 Сообщение было зашифровано\n👆 Нажмите чтобы скрыть';
+        lockIcon.title = '✅ Расшифровано MAKShield\n🔐 Сообщение было зашифровано\n👆 Нажмите чтобы скрыть';
         lockIcon.style.cssText = `
             position: absolute;
             top: -4px;
@@ -136,7 +136,7 @@ const MessageScanner = {
                 opacity: 1;
             `;
             lockEl.textContent = '🔒';
-            lockEl.title = '✅ Расшифровано MAX Shield\n🔐 Сообщение было зашифровано\n👆 Нажмите чтобы скрыть';
+            lockEl.title = '✅ Расшифровано MAKShield\n🔐 Сообщение было зашифровано\n👆 Нажмите чтобы скрыть';
             bubble.dataset.msShowDecrypted = 'true';
         }
     }
