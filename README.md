@@ -27,7 +27,7 @@ MAKShield is a browser extension that adds end-to-end encryption to MAX Messenge
 ### Installation
 
 #### Firefox
-1. Download the extension from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/mak-shield/) (pending review)
+1. Download the extension from SOON
 2. Or install manually:
    - Download the source code
    - Go to `about:debugging#/runtime/this-firefox`
@@ -114,18 +114,12 @@ MAKShield - это расширение браузера, добавляющее
 ### Установка
 
 #### Firefox
-1. Скачайте расширение из [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/mak-shield/) (на проверке)
+1. Скачайте расширение из СКОРО
 2. Или установите вручную:
    - Скачайте исходный код
    - Перейдите на `about:debugging#/runtime/this-firefox`
    - Нажмите "Загрузить временное дополнение"
    - Выберите любой файл из папки расширения
-
-#### Chrome/Edge
-1. Скачайте и распакуйте исходный код
-2. Перейдите на `chrome://extensions/` (или `edge://extensions/`)
-3. Включите "Режим разработчика"
-4. Нажмите "Загрузить распакованное" и выберите папку расширения
 
 ### Как это работает
 
