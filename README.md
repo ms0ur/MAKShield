@@ -181,21 +181,3 @@ MIT License - Бесплатно для личного и коммерческо
 
 Создано **ms0ur**
 
----
-
-## Firefox Add-on Policy Compliance
-
-This extension fully complies with [Mozilla Add-on Policies](https://extensionworkshop.com/documentation/publish/add-on-policies/):
-
-| Policy | Status | Details |
-|--------|--------|---------|
-| No Surprises | ✅ | Functionality matches description exactly |
-| No Remote Code | ✅ | All code is bundled, no external loading |
-| Minimal Permissions | ✅ | Only `storage` and site access required |
-| No Data Collection | ✅ | Zero data transmitted externally |
-| Readable Code | ✅ | No obfuscation or minification |
-| No CSP Relaxation | ✅ | Does not modify security headers |
-| Encryption | ✅ | Uses secure Web Crypto API |
-| Self-Contained | ✅ | No external dependencies |
-
-
