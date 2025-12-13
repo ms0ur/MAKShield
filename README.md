@@ -5,7 +5,7 @@
   <img src="maksicon.png" alt="MAKShield Logo" width="128">
 </p>
 
-**End-to-End Encryption for MAX Messenger (Web)**
+**End-to-End Encryption for MAX Messenger (Web) (Russian goverment messanger)**
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### Overview
 
-MAKShield is a browser extension that adds end-to-end encryption to MAX Messenger web client (`web.max.ru`). All encryption and decryption happens locally in your browser - no data is ever sent to external servers.
+MAKShield is a browser extension that adds end-to-end encryption to MAX Messenger web client (`web.max.ru`) (this is russian goverment messanger, all messages in extension only in russian). All encryption and decryption happens locally in your browser - no data is ever sent to external servers.
 
 ### Features
 
