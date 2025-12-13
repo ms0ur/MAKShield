@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "name": "MAX Shield V4.1",
+  "version": "4.1.0",
+  "description": "E2E Encryption for MAX Messenger - Per-Chat Keys",
+  "author": "ms0ur & Gemini & Claude",
+  "permissions": [
+    "storage",
+    "https://web.max.ru/*"
+  ],
+  "web_accessible_resources": [
+    "icon.png"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://web.max.ru/*"],
+      "js": [
+        "presets.js",
+        "crypto.js",
+        "storage.js",
+        "scanner.js",
+        "sender.js",
+        "ui.js",
+        "main.js"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}

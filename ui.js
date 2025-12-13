@@ -1,0 +1,640 @@
+const ShieldUI = {
+    panel: null,
+    isMinimized: false,
+
+    init: () => {
+        if (document.getElementById('ms-overlay')) return;
+
+        const iconUrl = chrome.runtime.getURL('icon.png');
+
+        const panel = document.createElement('div');
+        panel.id = 'ms-overlay';
+        panel.innerHTML = ShieldUI.getTemplate(iconUrl);
+
+        ShieldUI.applyStyles(panel);
+        document.body.appendChild(panel);
+        ShieldUI.panel = panel;
+
+        ShieldUI.bindEvents();
+        ShieldUI.checkInitialState();
+        ShieldUI.updateSpoofDisplay();
+    },
+
+    getTemplate: (iconUrl) => `
+        <img id="ms-logo" src="${iconUrl}" alt="Shield" title="MAX Shield">
+        <div id="ms-controls">
+            <div id="ms-chat-info" style="font-size: 10px; color: #666; text-align: center; margin-bottom: 4px;">
+                Chat: <span id="ms-chat-id">---</span>
+            </div>
+            <div id="ms-buttons-row" style="display: flex; gap: 6px; margin-bottom: 6px;">
+                <button id="ms-setup-btn" title="Установить ключ для этого чата">
+                    <span id="ms-ind"></span>
+                    KEY
+                </button>
+                <button id="ms-toggle-btn" title="Включить/выключить шифрование">
+                    <span id="ms-toggle-icon">⏸️</span>
+                </button>
+                <button id="ms-spoof-btn" title="Выбрать маскировку">
+                    🎭
+                </button>
+            </div>
+            <div id="ms-spoof-info" style="font-size: 9px; color: #888; text-align: center;">
+                <span id="ms-spoof-name">Wildberries</span>
+            </div>
+        </div>
+        <div id="ms-spoof-menu" style="display: none;">
+            <div class="ms-spoof-title">🎭 Маскировка</div>
+            <div class="ms-spoof-category">🔗 URL-ссылки</div>
+            <div id="ms-spoof-urls"></div>
+            <div class="ms-spoof-category">☠️ Crash Logs</div>
+            <div id="ms-spoof-crashes"></div>
+            <div class="ms-spoof-category">📋 System Logs</div>
+            <div id="ms-spoof-logs"></div>
+            <button id="ms-spoof-custom" class="ms-spoof-custom-btn">✏️ Свой шаблон</button>
+        </div>
+    `,
+
+    applyStyles: (panel) => {
+        panel.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            background: rgba(10, 12, 10, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 0, 0.15);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transition: all 0.3s ease;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        `;
+
+        const style = document.createElement('style');
+        style.textContent = `
+            #ms-overlay #ms-logo {
+                width: 100px;
+                height: 100px;
+                cursor: pointer;
+                opacity: 0.95;
+                transition: transform 0.2s, opacity 0.2s;
+                border-radius: 16px;
+                filter: drop-shadow(0 2px 8px rgba(0,255,0,0.2));
+            }
+            #ms-overlay #ms-logo:hover {
+                transform: scale(1.05);
+                opacity: 1;
+                filter: drop-shadow(0 4px 12px rgba(0,255,0,0.3));
+            }
+            #ms-overlay #ms-controls {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+            }
+            #ms-overlay button {
+                background: rgba(255,255,255,0.05);
+                border: 1px solid #444;
+                color: #aaa;
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 12px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 12px;
+                border-radius: 20px;
+                transition: all 0.2s;
+            }
+            #ms-overlay button:hover {
+                background: rgba(255,255,255,0.1);
+                border-color: #666;
+                color: #fff;
+            }
+            #ms-overlay #ms-ind {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: #555;
+                display: inline-block;
+                transition: all 0.3s;
+            }
+            #ms-overlay.minimized {
+                padding: 12px;
+                border-radius: 24px;
+            }
+            #ms-overlay.minimized #ms-controls {
+                display: none;
+            }
+            #ms-overlay.minimized #ms-spoof-menu {
+                display: none !important;
+            }
+            #ms-overlay.minimized #ms-logo {
+                width: 48px;
+                height: 48px;
+            }
+            #ms-spoof-menu {
+                background: rgba(20, 25, 20, 0.95);
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 12px;
+                min-width: 200px;
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            #ms-spoof-menu::-webkit-scrollbar {
+                width: 6px;
+            }
+            #ms-spoof-menu::-webkit-scrollbar-thumb {
+                background: #333;
+                border-radius: 3px;
+            }
+            .ms-spoof-title {
+                color: #0f0;
+                font-size: 12px;
+                text-align: center;
+                margin-bottom: 10px;
+                font-weight: bold;
+            }
+            .ms-spoof-category {
+                color: #888;
+                font-size: 10px;
+                margin: 8px 0 4px 0;
+                padding-bottom: 2px;
+                border-bottom: 1px solid #333;
+            }
+            #ms-spoof-urls, #ms-spoof-crashes, #ms-spoof-logs {
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
+            }
+            .ms-spoof-item {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid #333;
+                color: #aaa;
+                padding: 6px 10px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 11px;
+                transition: all 0.2s;
+                text-align: left;
+            }
+            .ms-spoof-item:hover {
+                background: rgba(255,255,255,0.08);
+                border-color: #555;
+                color: #fff;
+            }
+            .ms-spoof-item.active {
+                background: rgba(0,255,0,0.1);
+                border-color: #0a0;
+                color: #0f0;
+            }
+            .ms-spoof-custom-btn {
+                width: 100%;
+                margin-top: 10px;
+                justify-content: center;
+                background: rgba(255,200,0,0.1) !important;
+                border-color: #553 !important;
+                color: #fd0 !important;
+            }
+            .ms-spoof-custom-btn:hover {
+                background: rgba(255,200,0,0.2) !important;
+                border-color: #885 !important;
+            }
+            .ms-toast {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: rgba(0, 40, 0, 0.95);
+                color: #0f0;
+                padding: 12px 20px;
+                border-radius: 8px;
+                border: 1px solid #0f0;
+                font-family: monospace;
+                font-size: 13px;
+                z-index: 1000000;
+                animation: msToastIn 0.3s ease;
+                box-shadow: 0 4px 15px rgba(0,255,0,0.2);
+            }
+            .ms-toast.error {
+                background: rgba(40, 0, 0, 0.95);
+                color: #f55;
+                border-color: #f55;
+                box-shadow: 0 4px 15px rgba(255,0,0,0.2);
+            }
+            @keyframes msToastIn {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .ms-modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.7);
+                z-index: 1000001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .ms-modal {
+                background: rgba(15, 20, 15, 0.98);
+                border: 1px solid #0a0;
+                border-radius: 16px;
+                padding: 20px;
+                min-width: 400px;
+                max-width: 550px;
+            }
+            .ms-modal-title {
+                color: #0f0;
+                font-size: 14px;
+                font-weight: bold;
+                margin-bottom: 16px;
+                text-align: center;
+            }
+            .ms-modal-field {
+                margin-bottom: 12px;
+            }
+            .ms-modal-label {
+                color: #888;
+                font-size: 11px;
+                margin-bottom: 4px;
+                display: block;
+            }
+            .ms-modal-input {
+                width: 100%;
+                background: rgba(0,0,0,0.3);
+                border: 1px solid #333;
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: #fff;
+                font-family: monospace;
+                font-size: 12px;
+                box-sizing: border-box;
+            }
+            .ms-modal-textarea {
+                width: 100%;
+                background: rgba(0,0,0,0.3);
+                border: 1px solid #333;
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: #fff;
+                font-family: monospace;
+                font-size: 11px;
+                box-sizing: border-box;
+                resize: vertical;
+                min-height: 80px;
+            }
+            .ms-modal-input:focus, .ms-modal-textarea:focus {
+                outline: none;
+                border-color: #0a0;
+            }
+            .ms-modal-hint {
+                color: #666;
+                font-size: 10px;
+                margin-top: 4px;
+            }
+            .ms-modal-buttons {
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }
+            .ms-modal-btn {
+                flex: 1;
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid #444;
+                background: rgba(255,255,255,0.05);
+                color: #aaa;
+                cursor: pointer;
+                font-size: 12px;
+                transition: all 0.2s;
+            }
+            .ms-modal-btn:hover {
+                background: rgba(255,255,255,0.1);
+                color: #fff;
+            }
+            .ms-modal-btn.primary {
+                background: rgba(0,255,0,0.1);
+                border-color: #0a0;
+                color: #0f0;
+            }
+            .ms-modal-btn.primary:hover {
+                background: rgba(0,255,0,0.2);
+            }
+        `;
+        document.head.appendChild(style);
+    },
+
+    bindEvents: () => {
+        const logo = document.getElementById('ms-logo');
+        const btn = document.getElementById('ms-setup-btn');
+        const toggleBtn = document.getElementById('ms-toggle-btn');
+        const spoofBtn = document.getElementById('ms-spoof-btn');
+
+        logo.onclick = () => {
+            ShieldUI.panel.classList.toggle('minimized');
+            ShieldUI.isMinimized = !ShieldUI.isMinimized;
+            if (ShieldUI.isMinimized) {
+                document.getElementById('ms-spoof-menu').style.display = 'none';
+            }
+        };
+
+        btn.onclick = async () => {
+            const chatId = ShieldStorage.getCurrentChatId();
+            if (!chatId) {
+                ShieldUI.toast('Откройте чат!', 'error');
+                return;
+            }
+
+            const chatData = await ShieldStorage.getChatData();
+            const currentKey = chatData?.key || '';
+
+            const pass = prompt(`🔐 Ключ для чата #${chatId}\n(Пустое = удалить):`, currentKey);
+
+            if (pass === null) return;
+
+            if (pass === "") {
+                await ShieldStorage.removeChatPassword();
+                ShieldState.isActive = false;
+                ShieldUI.updateIndicator(false);
+                ShieldUI.updateEmojiButton(false);
+                ShieldUI.toast('Ключ удалён', 'error');
+            } else {
+                await ShieldStorage.setChatPassword(pass);
+                ShieldState.isActive = true;
+                ShieldUI.updateIndicator(true);
+                ShieldUI.updateEmojiButton(true);
+                ShieldUI.toast(`Ключ установлен для чата #${chatId}! 🛡️`);
+
+                if (typeof scanMessages === 'function') {
+                    scanMessages();
+                }
+            }
+        };
+
+        toggleBtn.onclick = async () => {
+            const chatData = await ShieldStorage.getChatData();
+            if (!chatData || !chatData.key) {
+                ShieldUI.toast('Сначала установите ключ!', 'error');
+                return;
+            }
+
+            const newState = !chatData.enabled;
+            await ShieldStorage.toggleChatEncryption(newState);
+            ShieldState.isActive = newState;
+            ShieldUI.updateIndicator(newState);
+            ShieldUI.updateEmojiButton(newState);
+            ShieldUI.updateToggleButton(newState);
+
+            ShieldUI.toast(newState ? 'Шифрование включено 🔒' : 'Шифрование выключено 🔓');
+
+            if (newState && typeof scanMessages === 'function') {
+                scanMessages();
+            }
+        };
+
+        spoofBtn.onclick = () => {
+            ShieldUI.toggleSpoofMenu();
+        };
+
+        document.getElementById('ms-spoof-custom').onclick = () => {
+            ShieldUI.showCustomSpoofModal();
+        };
+
+        let lastChatId = ShieldStorage.getCurrentChatId();
+        setInterval(async () => {
+            const currentChatId = ShieldStorage.getCurrentChatId();
+            if (currentChatId !== lastChatId) {
+                lastChatId = currentChatId;
+                await ShieldUI.onChatChanged(currentChatId);
+            }
+        }, 500);
+    },
+
+    toggleSpoofMenu: async () => {
+        const menu = document.getElementById('ms-spoof-menu');
+        const isVisible = menu.style.display !== 'none';
+
+        if (isVisible) {
+            menu.style.display = 'none';
+        } else {
+            await ShieldUI.renderSpoofPresets();
+            menu.style.display = 'block';
+        }
+    },
+
+    renderSpoofPresets: async () => {
+        const urlContainer = document.getElementById('ms-spoof-urls');
+        const crashContainer = document.getElementById('ms-spoof-crashes');
+        const logContainer = document.getElementById('ms-spoof-logs');
+        const currentPreset = await ShieldStorage.getSpoofPreset();
+
+        urlContainer.innerHTML = '';
+        crashContainer.innerHTML = '';
+        logContainer.innerHTML = '';
+
+        const urlPresets = ['wildberries', 'ozon', 'aliexpress', 'youtube', 'vk', 'google'];
+        const crashPresets = ['crashlog_java', 'crashlog_python', 'crashlog_js', 'crashlog_rust'];
+        const logPresets = ['log_nginx', 'log_docker', 'log_kernel', 'log_android', 'log_git', 'log_sql', 'log_ssl', 'log_webpack'];
+
+        const createItem = (id, preset, container) => {
+            const item = document.createElement('div');
+            item.className = `ms-spoof-item ${currentPreset.id === id ? 'active' : ''}`;
+            item.textContent = preset.name;
+            item.onclick = async () => {
+                await ShieldStorage.setSpoofPreset(id);
+                await ShieldUI.updateSpoofDisplay();
+                document.getElementById('ms-spoof-menu').style.display = 'none';
+                ShieldUI.toast(`Маска: ${preset.name}`);
+            };
+            container.appendChild(item);
+        };
+
+        urlPresets.forEach(id => createItem(id, SpoofPresets[id], urlContainer));
+        crashPresets.forEach(id => createItem(id, SpoofPresets[id], crashContainer));
+        logPresets.forEach(id => createItem(id, SpoofPresets[id], logContainer));
+
+        if (currentPreset.id === 'custom') {
+            const customItem = document.createElement('div');
+            customItem.className = 'ms-spoof-item active';
+            customItem.textContent = '✏️ Custom';
+            urlContainer.appendChild(customItem);
+        }
+    },
+
+    showCustomSpoofModal: () => {
+        const existing = document.querySelector('.ms-modal-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'ms-modal-overlay';
+        overlay.innerHTML = `
+            <div class="ms-modal">
+                <div class="ms-modal-title">✏️ Свой шаблон маскировки</div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Название</label>
+                    <input type="text" class="ms-modal-input" id="ms-custom-name" 
+                           placeholder="My Custom Spoof">
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Шаблон (URL или текст)</label>
+                    <textarea class="ms-modal-textarea" id="ms-custom-template" 
+                           placeholder="https://example.com/?data={DATA}&#10;или многострочный текст с {DATA}"></textarea>
+                    <div class="ms-modal-hint">{RND} - случайное число, {DATA} - зашифрованные данные</div>
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Regex для извлечения данных</label>
+                    <input type="text" class="ms-modal-input" id="ms-custom-extract" 
+                           placeholder="data=([^&\\s]+) или Error: (.+)$">
+                    <div class="ms-modal-hint">Группа захвата (1) должна содержать {DATA}</div>
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Детекторы (через запятую)</label>
+                    <input type="text" class="ms-modal-input" id="ms-custom-detect" 
+                           placeholder="example.com, data=">
+                    <div class="ms-modal-hint">Строки для определения зашифрованного сообщения</div>
+                </div>
+                <div class="ms-modal-buttons">
+                    <button class="ms-modal-btn" id="ms-modal-cancel">Отмена</button>
+                    <button class="ms-modal-btn primary" id="ms-modal-save">Сохранить</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) overlay.remove();
+        };
+
+        document.getElementById('ms-modal-cancel').onclick = () => overlay.remove();
+
+        document.getElementById('ms-modal-save').onclick = async () => {
+            const name = document.getElementById('ms-custom-name').value.trim() || 'Custom';
+            const template = document.getElementById('ms-custom-template').value.trim();
+            const extractStr = document.getElementById('ms-custom-extract').value.trim();
+            const detectStr = document.getElementById('ms-custom-detect').value.trim();
+
+            if (!template || !detectStr) {
+                ShieldUI.toast('Заполните шаблон и детекторы!', 'error');
+                return;
+            }
+
+            if (!template.includes('{DATA}')) {
+                ShieldUI.toast('Шаблон должен содержать {DATA}!', 'error');
+                return;
+            }
+
+            const detect = detectStr.split(',').map(s => s.trim()).filter(s => s);
+            if (detect.length < 1) {
+                ShieldUI.toast('Нужен хотя бы один детектор!', 'error');
+                return;
+            }
+
+            const type = template.startsWith('http') ? 'url' : 'text';
+
+            await ShieldStorage.setCustomSpoof(name, template, null, detect, type, extractStr || null);
+            await ShieldUI.updateSpoofDisplay();
+            overlay.remove();
+            document.getElementById('ms-spoof-menu').style.display = 'none';
+            ShieldUI.toast('Свой шаблон сохранён! ✏️');
+        };
+    },
+
+    updateSpoofDisplay: async () => {
+        const preset = await ShieldStorage.getSpoofPreset();
+        const nameEl = document.getElementById('ms-spoof-name');
+        if (nameEl) {
+            nameEl.textContent = preset.name;
+        }
+    },
+
+    onChatChanged: async (chatId) => {
+        document.getElementById('ms-chat-id').textContent = chatId || '---';
+
+        const chatData = await ShieldStorage.getChatData(chatId);
+        const hasKey = chatData && chatData.key;
+        const isEnabled = chatData && chatData.enabled;
+
+        ShieldState.isActive = isEnabled;
+        ShieldUI.updateIndicator(isEnabled);
+        ShieldUI.updateEmojiButton(isEnabled);
+        ShieldUI.updateToggleButton(isEnabled);
+
+        if (isEnabled && typeof scanMessages === 'function') {
+            scanMessages();
+        }
+    },
+
+    updateEmojiButton: (encryptionActive) => {
+        const emojiBtn = document.querySelector('button[aria-label="Открыть меню стикеров"]');
+        if (emojiBtn) {
+            const wrapper = emojiBtn.closest('.btn');
+            if (wrapper) {
+                wrapper.style.display = encryptionActive ? 'none' : '';
+            }
+        }
+    },
+
+    updateToggleButton: (enabled) => {
+        const icon = document.getElementById('ms-toggle-icon');
+        if (icon) {
+            icon.textContent = enabled ? '⏸️' : '▶️';
+        }
+    },
+
+    checkInitialState: async () => {
+        const chatId = ShieldStorage.getCurrentChatId();
+        document.getElementById('ms-chat-id').textContent = chatId || '---';
+
+        const chatData = await ShieldStorage.getChatData();
+        const hasKey = chatData && chatData.key;
+        const isEnabled = chatData && chatData.enabled;
+
+        ShieldState.isActive = isEnabled;
+        ShieldUI.updateIndicator(isEnabled);
+        ShieldUI.updateEmojiButton(isEnabled);
+        ShieldUI.updateToggleButton(isEnabled);
+    },
+
+    updateIndicator: (active) => {
+        const ind = document.getElementById('ms-ind');
+        const btn = document.getElementById('ms-setup-btn');
+
+        if (!ind || !btn) return;
+
+        if (active) {
+            ind.style.background = '#00ff00';
+            ind.style.boxShadow = '0 0 8px #00ff00';
+            btn.style.color = '#fff';
+            btn.style.borderColor = '#0a0';
+        } else {
+            ind.style.background = '#555';
+            ind.style.boxShadow = 'none';
+            btn.style.color = '#aaa';
+            btn.style.borderColor = '#444';
+        }
+    },
+
+    toast: (message, type = 'success') => {
+        const existing = document.querySelector('.ms-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = `ms-toast ${type === 'error' ? 'error' : ''}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(20px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 2500);
+    }
+};
