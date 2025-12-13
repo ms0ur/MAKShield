@@ -16,7 +16,8 @@
     "https://web.max.ru/*"
   ],
   "web_accessible_resources": [
-    "maksicon.png"
+    "maksicon.png",
+    "maksbanner.png"
   ],
   "content_scripts": [
     {

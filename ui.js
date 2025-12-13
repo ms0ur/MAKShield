@@ -76,12 +76,25 @@ const ShieldUI = {
         </div>
         <div id="ms-spoof-menu" style="display: none;">
             <div class="ms-spoof-title">🎭 Маскировка</div>
+            <div id="ms-length-info" class="ms-length-info">
+                <span id="ms-length-icon">📄</span>
+                <span id="ms-length-text">Любая длина</span>
+            </div>
+            <div class="ms-filter-row">
+                <button class="ms-filter-btn active" data-filter="all">Все</button>
+                <button class="ms-filter-btn" data-filter="url">🔗</button>
+                <button class="ms-filter-btn" data-filter="crash">☠️</button>
+                <button class="ms-filter-btn" data-filter="log">📋</button>
+                <button class="ms-filter-btn" data-filter="multi">×3+</button>
+            </div>
             <div class="ms-spoof-category">🔗 URL-ссылки</div>
             <div id="ms-spoof-urls"></div>
             <div class="ms-spoof-category">☠️ Crash Logs</div>
             <div id="ms-spoof-crashes"></div>
             <div class="ms-spoof-category">📋 System Logs</div>
             <div id="ms-spoof-logs"></div>
+            <div class="ms-spoof-category">📄 Другое</div>
+            <div id="ms-spoof-other"></div>
             <button id="ms-spoof-custom" class="ms-spoof-custom-btn">✏️ Свой шаблон</button>
         </div>
     `,
@@ -175,8 +188,9 @@ const ShieldUI = {
                 border: 1px solid #333;
                 border-radius: 12px;
                 padding: 12px;
-                min-width: 200px;
-                max-height: 400px;
+                min-width: 240px;
+                max-width: 320px;
+                max-height: 500px;
                 overflow-y: auto;
             }
             #ms-spoof-menu::-webkit-scrollbar {
@@ -237,6 +251,83 @@ const ShieldUI = {
             .ms-spoof-custom-btn:hover {
                 background: rgba(255,200,0,0.2) !important;
                 border-color: #885 !important;
+            }
+            .ms-length-info {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding: 6px 10px;
+                margin-bottom: 8px;
+                background: rgba(0,255,0,0.1);
+                border: 1px solid rgba(0,255,0,0.2);
+                border-radius: 8px;
+                font-size: 10px;
+                color: #0f0;
+            }
+            .ms-filter-row {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 8px;
+                flex-wrap: wrap;
+            }
+            .ms-filter-btn {
+                padding: 4px 8px !important;
+                font-size: 10px !important;
+                border-radius: 6px !important;
+                background: rgba(255,255,255,0.05) !important;
+                border: 1px solid #333 !important;
+                color: #888 !important;
+                cursor: pointer;
+                flex: 1;
+                min-width: 30px;
+            }
+            .ms-filter-btn:hover {
+                background: rgba(255,255,255,0.1) !important;
+                color: #fff !important;
+            }
+            .ms-filter-btn.active {
+                background: rgba(0,255,0,0.15) !important;
+                border-color: #0a0 !important;
+                color: #0f0 !important;
+            }
+            .ms-length-badge {
+                font-size: 9px;
+                padding: 2px 6px;
+                border-radius: 4px;
+                margin-left: 4px;
+            }
+            .ms-length-badge.short {
+                background: rgba(0,200,255,0.15);
+                color: #0cf;
+            }
+            .ms-length-badge.medium {
+                background: rgba(255,200,0,0.15);
+                color: #fc0;
+            }
+            .ms-length-badge.long {
+                background: rgba(255,100,100,0.15);
+                color: #f88;
+            }
+            .ms-multipart-badge {
+                font-size: 8px;
+                padding: 1px 4px;
+                border-radius: 3px;
+                background: rgba(150,100,255,0.2);
+                color: #a8f;
+                margin-left: 4px;
+            }
+            /* Decryption status animations */
+            @keyframes ms-spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            .ms-pending-container .ms-spinner {
+                display: inline-block;
+                animation: ms-spin 1s linear infinite;
+            }
+            .ms-failed-container:hover {
+                background: rgba(255, 80, 80, 0.15) !important;
             }
             /* Key Menu Styles */
             #ms-key-menu {
@@ -499,6 +590,19 @@ const ShieldUI = {
             ShieldUI.toast('ECDH ключи сброшены', 'error');
         };
 
+        // Filter buttons handler (delegated event)
+        document.getElementById('ms-spoof-menu')?.addEventListener('click', (e) => {
+            const filterBtn = e.target.closest('.ms-filter-btn');
+            if (!filterBtn) return;
+
+            document.querySelectorAll('.ms-filter-btn').forEach(b => b.classList.remove('active'));
+            filterBtn.classList.add('active');
+
+            const filter = filterBtn.dataset.filter;
+            ShieldUI.currentFilter = filter;
+            ShieldUI.applyPresetFilter(filter);
+        });
+
         toggleBtn.onclick = async () => {
             const chatData = await ShieldStorage.getChatData();
             if (!chatData || !chatData.key) {
@@ -746,38 +850,84 @@ const ShieldUI = {
         const urlContainer = document.getElementById('ms-spoof-urls');
         const crashContainer = document.getElementById('ms-spoof-crashes');
         const logContainer = document.getElementById('ms-spoof-logs');
+        const otherContainer = document.getElementById('ms-spoof-other');
         const currentPreset = await ShieldStorage.getSpoofPreset();
 
         urlContainer.innerHTML = '';
         crashContainer.innerHTML = '';
         logContainer.innerHTML = '';
+        otherContainer.innerHTML = '';
 
-        const urlPresets = ['wildberries', 'ozon', 'aliexpress', 'youtube', 'vk', 'google'];
-        const crashPresets = ['crashlog_java', 'crashlog_python', 'crashlog_js', 'crashlog_rust'];
-        const logPresets = ['log_nginx', 'log_docker', 'log_kernel', 'log_android', 'log_git', 'log_sql', 'log_ssl', 'log_webpack'];
+        // All URL presets
+        const urlPresets = ['wildberries', 'ozon', 'aliexpress', 'youtube', 'vk', 'google',
+                           'amazon', 'github', 'telegram', 'reddit', 'twitter', 'yandex_market',
+                           'avito', 'instagram', 'tiktok', 'spotify', 'notion', 'discord',
+                           'steam', 'linkedin', 'dropbox'];
+        // All crash presets
+        const crashPresets = ['crashlog_java', 'crashlog_python', 'crashlog_js', 'crashlog_rust',
+                             'crashlog_go', 'crashlog_csharp', 'crashlog_kotlin', 'crashlog_swift',
+                             'crashlog_php', 'crashlog_ruby', 'crashlog_scala', 'crashlog_elixir',
+                             'crashlog_full_java', 'crashlog_simple'];
+        // All log presets
+        const logPresets = ['log_nginx', 'log_docker', 'log_kernel', 'log_android', 'log_git',
+                           'log_sql', 'log_ssl', 'log_webpack', 'log_kubernetes', 'log_systemd',
+                           'log_aws', 'log_elasticsearch', 'log_postgres', 'log_redis',
+                           'log_apache', 'log_mongodb', 'log_graphql', 'log_terraform',
+                           'log_ansible', 'log_jenkins', 'log_prometheus', 'log_sentry',
+                           'log_distributed', 'log_microservices', 'log_simple'];
+        // Other presets (including multipart advanced)
+        const otherPresets = ['hex_dump', 'base64_block', 'jwt_token', 'network_packet', 'coredump',
+                             'debug_session', 'api_request_log', 'security_audit', 'test_failure'];
+
+        const getLengthBadge = (category) => {
+            const badges = {
+                'short': '<span class="ms-length-badge short">📝 Корот.</span>',
+                'medium': '<span class="ms-length-badge medium">📄 Сред.</span>',
+                'long': '<span class="ms-length-badge long">📜 Длин.</span>'
+            };
+            return badges[category] || '';
+        };
+
+        const getMultipartBadge = (preset) => {
+            if (preset.multipart && preset.parts) {
+                return `<span class="ms-multipart-badge">×${preset.parts}</span>`;
+            }
+            return '';
+        };
 
         const createItem = (id, preset, container) => {
             const item = document.createElement('div');
             item.className = `ms-spoof-item ${currentPreset.id === id ? 'active' : ''}`;
-            item.textContent = preset.name;
+            item.innerHTML = `${preset.name}${getLengthBadge(preset.lengthCategory)}${getMultipartBadge(preset)}`;
+            item.title = preset.description || '';
             item.onclick = async () => {
                 await ShieldStorage.setSpoofPreset(id);
                 await ShieldUI.updateSpoofDisplay();
                 document.getElementById('ms-spoof-menu').style.display = 'none';
-                ShieldUI.toast(`Маска: ${preset.name}`);
+                const info = preset.multipart ? ` (×${preset.parts} частей)` : '';
+                ShieldUI.toast(`Маска: ${preset.name}${info}`);
             };
             container.appendChild(item);
         };
 
-        urlPresets.forEach(id => createItem(id, SpoofPresets[id], urlContainer));
-        crashPresets.forEach(id => createItem(id, SpoofPresets[id], crashContainer));
-        logPresets.forEach(id => createItem(id, SpoofPresets[id], logContainer));
+        urlPresets.forEach(id => {
+            if (SpoofPresets[id]) createItem(id, SpoofPresets[id], urlContainer);
+        });
+        crashPresets.forEach(id => {
+            if (SpoofPresets[id]) createItem(id, SpoofPresets[id], crashContainer);
+        });
+        logPresets.forEach(id => {
+            if (SpoofPresets[id]) createItem(id, SpoofPresets[id], logContainer);
+        });
+        otherPresets.forEach(id => {
+            if (SpoofPresets[id]) createItem(id, SpoofPresets[id], otherContainer);
+        });
 
         if (currentPreset.id === 'custom') {
             const customItem = document.createElement('div');
             customItem.className = 'ms-spoof-item active';
             customItem.textContent = '✏️ Custom';
-            urlContainer.appendChild(customItem);
+            otherContainer.appendChild(customItem);
         }
     },
 
@@ -864,7 +1014,11 @@ const ShieldUI = {
         const preset = await ShieldStorage.getSpoofPreset();
         const nameEl = document.getElementById('ms-spoof-name');
         if (nameEl) {
-            nameEl.textContent = preset.name;
+            let name = preset.name;
+            if (preset.multipart && preset.parts) {
+                name += ` (×${preset.parts})`;
+            }
+            nameEl.textContent = name;
         }
     },
 
@@ -876,7 +1030,6 @@ const ShieldUI = {
         document.getElementById('ms-spoof-menu').style.display = 'none';
 
         const chatData = await ShieldStorage.getChatData(chatId);
-        const hasKey = chatData && chatData.key;
         const isEnabled = chatData && chatData.enabled;
 
         ShieldState.isActive = isEnabled;
@@ -917,7 +1070,6 @@ const ShieldUI = {
         document.getElementById('ms-chat-id').textContent = chatId || '---';
 
         const chatData = await ShieldStorage.getChatData();
-        const hasKey = chatData && chatData.key;
         const isEnabled = chatData && chatData.enabled;
 
         ShieldState.isActive = isEnabled;
@@ -960,5 +1112,120 @@ const ShieldUI = {
             toast.style.transform = 'translateY(20px)';
             setTimeout(() => toast.remove(), 300);
         }, 2500);
-    }
+    },
+
+    // Update length info display based on current text length
+    updateLengthInfo: (textLength) => {
+        const iconEl = document.getElementById('ms-length-icon');
+        const textEl = document.getElementById('ms-length-text');
+
+        if (!iconEl || !textEl) return;
+
+        let category, icon, text, color;
+
+        if (textLength === 0) {
+            icon = '📄';
+            text = 'Любая длина';
+            color = '#888';
+            category = null;
+        } else if (textLength <= 50) {
+            icon = '📝';
+            text = `Короткое (${textLength} симв.)`;
+            color = '#0cf';
+            category = 'short';
+        } else if (textLength <= 200) {
+            icon = '📄';
+            text = `Среднее (${textLength} симв.)`;
+            color = '#fc0';
+            category = 'medium';
+        } else {
+            icon = '📜';
+            text = `Длинное (${textLength} симв.)`;
+            color = '#f88';
+            category = 'long';
+        }
+
+        iconEl.textContent = icon;
+        textEl.textContent = text;
+        textEl.style.color = color;
+
+        // Store current category for filtering
+        ShieldUI.currentLengthCategory = category;
+    },
+
+    // Apply filter to show/hide preset categories
+    applyPresetFilter: (filter) => {
+        const urlSection = document.getElementById('ms-spoof-urls')?.parentElement;
+        const crashSection = document.getElementById('ms-spoof-crashes')?.parentElement;
+        const logSection = document.getElementById('ms-spoof-logs')?.parentElement;
+        const otherSection = document.getElementById('ms-spoof-other')?.parentElement;
+
+        // Get all category headers
+        const categories = document.querySelectorAll('#ms-spoof-menu .ms-spoof-category');
+        const urlCat = categories[0];
+        const crashCat = categories[1];
+        const logCat = categories[2];
+        const otherCat = categories[3];
+
+        const urlDiv = document.getElementById('ms-spoof-urls');
+        const crashDiv = document.getElementById('ms-spoof-crashes');
+        const logDiv = document.getElementById('ms-spoof-logs');
+        const otherDiv = document.getElementById('ms-spoof-other');
+
+        // Show all by default
+        if (urlCat) urlCat.style.display = '';
+        if (crashCat) crashCat.style.display = '';
+        if (logCat) logCat.style.display = '';
+        if (otherCat) otherCat.style.display = '';
+        if (urlDiv) urlDiv.style.display = '';
+        if (crashDiv) crashDiv.style.display = '';
+        if (logDiv) logDiv.style.display = '';
+        if (otherDiv) otherDiv.style.display = '';
+
+        // Apply filter
+        switch(filter) {
+            case 'url':
+                if (crashCat) crashCat.style.display = 'none';
+                if (logCat) logCat.style.display = 'none';
+                if (otherCat) otherCat.style.display = 'none';
+                if (crashDiv) crashDiv.style.display = 'none';
+                if (logDiv) logDiv.style.display = 'none';
+                if (otherDiv) otherDiv.style.display = 'none';
+                break;
+            case 'crash':
+                if (urlCat) urlCat.style.display = 'none';
+                if (logCat) logCat.style.display = 'none';
+                if (otherCat) otherCat.style.display = 'none';
+                if (urlDiv) urlDiv.style.display = 'none';
+                if (logDiv) logDiv.style.display = 'none';
+                if (otherDiv) otherDiv.style.display = 'none';
+                break;
+            case 'log':
+                if (urlCat) urlCat.style.display = 'none';
+                if (crashCat) crashCat.style.display = 'none';
+                if (otherCat) otherCat.style.display = 'none';
+                if (urlDiv) urlDiv.style.display = 'none';
+                if (crashDiv) crashDiv.style.display = 'none';
+                if (otherDiv) otherDiv.style.display = 'none';
+                break;
+            case 'multi':
+                // Show only multipart presets (3+ parts)
+                document.querySelectorAll('.ms-spoof-item').forEach(item => {
+                    const badge = item.querySelector('.ms-multipart-badge');
+                    const parts = badge ? parseInt(badge.textContent.replace('×', '')) : 1;
+                    item.style.display = parts >= 3 ? '' : 'none';
+                });
+                break;
+            case 'all':
+            default:
+                // Show all
+                document.querySelectorAll('.ms-spoof-item').forEach(item => {
+                    item.style.display = '';
+                });
+                break;
+        }
+    },
+
+    currentFilter: 'all',
+    currentLengthCategory: null
 };

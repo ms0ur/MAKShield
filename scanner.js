@@ -1,4 +1,6 @@
 const MessageScanner = {
+    isScanning: false, // Flag to prevent recursive scanning
+
     throttle: (func, limit) => {
         let inThrottle;
         return function(...args) {
@@ -129,43 +131,58 @@ const MessageScanner = {
     },
 
     scan: async () => {
-        if (!ShieldState.isActive) {
-            // Even if not active, scan for ECDH key exchange messages
-            await MessageScanner.scanForECDH();
-            return;
-        }
+        // Prevent recursive scanning
+        if (MessageScanner.isScanning) return;
+        MessageScanner.isScanning = true;
 
-        const bubbles = document.querySelectorAll(ShieldSelectors.BUBBLE_TEXT);
+        try {
+            if (!ShieldState.isActive) {
+                // Even if not active, scan for ECDH key exchange messages
+                await MessageScanner.scanForECDH();
+                return;
+            }
 
-        for (const bubble of bubbles) {
-            if (bubble.dataset.msDecrypted) continue;
+            const bubbles = document.querySelectorAll(ShieldSelectors.BUBBLE_TEXT);
 
-            const text = bubble.innerText;
+            for (const bubble of bubbles) {
+                if (bubble.dataset.msDecrypted) continue;
 
-            const isEncrypted = await MessageScanner.isEncryptedMessage(text);
-            if (isEncrypted) {
-                // First check if it's an ECDH message
-                const payload = await CryptoEngine.parsePayloadAsync(text);
-                if (payload && payload.t === 'ecdh') {
-                    bubble.dataset.msDecrypted = "ecdh";
-                    await MessageScanner.handleECDHMessage(payload, bubble);
-                    continue;
-                }
+                const text = bubble.innerText;
 
-                bubble.dataset.msDecrypted = "pending";
+                const isEncrypted = await MessageScanner.isEncryptedMessage(text);
+                if (isEncrypted) {
+                    // First check if it's an ECDH message
+                    const payload = await CryptoEngine.parsePayloadAsync(text);
+                    if (payload && payload.t === 'ecdh') {
+                        bubble.dataset.msDecrypted = "ecdh";
+                        await MessageScanner.handleECDHMessage(payload, bubble);
+                        continue;
+                    }
 
-                const password = await ShieldStorage.getChatPassword();
-                if (!password) return;
+                    // Show pending status
+                    bubble.dataset.msDecrypted = "pending";
+                    MessageScanner.renderPending(bubble, text);
 
-                const result = await CryptoEngine.decrypt(text, password);
+                    const password = await ShieldStorage.getChatPassword();
+                    if (!password) {
+                        // No password - show failed
+                        MessageScanner.renderFailed(bubble, text);
+                        continue;
+                    }
 
-                if (result) {
-                    MessageScanner.renderDecrypted(bubble, result, text);
-                    bubble.dataset.msDecrypted = "true";
-                } else {
-                    bubble.removeAttribute('data-ms-decrypted');
+                    const result = await CryptoEngine.decrypt(text, password);
+
+                    if (result) {
+                        MessageScanner.renderDecrypted(bubble, result, text);
+                        bubble.dataset.msDecrypted = "true";
+                    } else {
+                        // Decryption failed
+                        MessageScanner.renderFailed(bubble, text);
+                    }
                 }
             }
+        } finally {
+            MessageScanner.isScanning = false;
         }
     },
 
@@ -248,6 +265,121 @@ const MessageScanner = {
         container.appendChild(lockIcon);
         container.appendChild(decryptedSpan);
         bubble.appendChild(container);
+    },
+
+    // Render pending decryption status
+    renderPending: (bubble, originalText) => {
+        bubble.dataset.msOriginal = originalText;
+
+        const container = document.createElement('div');
+        container.className = 'ms-pending-container';
+        container.style.cssText = `
+            position: relative;
+            padding: 6px 10px;
+            background: rgba(255, 200, 0, 0.08);
+            border-radius: 6px;
+            border-left: 3px solid #fc0;
+        `;
+
+        container.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="ms-spinner" style="font-size: 12px; animation: ms-spin 1s linear infinite;">⏳</span>
+                <span style="color: #fc0; font-size: 11px;">Расшифровка...</span>
+            </div>
+        `;
+
+        bubble.innerHTML = '';
+        bubble.appendChild(container);
+    },
+
+    // Render failed decryption status
+    renderFailed: (bubble, originalText) => {
+        bubble.dataset.msOriginal = originalText;
+        bubble.dataset.msDecrypted = 'failed';
+
+        const container = document.createElement('div');
+        container.className = 'ms-failed-container';
+        container.style.cssText = `
+            position: relative;
+            padding: 6px 10px;
+            background: rgba(255, 80, 80, 0.08);
+            border-radius: 6px;
+            border-left: 3px solid #f55;
+            cursor: pointer;
+        `;
+
+        container.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 12px;">🔐</span>
+                <span style="color: #f88; font-size: 11px; flex: 1;">Зашифровано (неверный ключ?)</span>
+                <span style="font-size: 9px; color: #666; text-decoration: underline;">показать</span>
+            </div>
+        `;
+
+        container.title = 'Не удалось расшифровать.\nВозможные причины:\n• Неверный ключ шифрования\n• Сообщение от другого пресета\n• Повреждённые данные\n\nНажмите чтобы показать оригинал';
+
+        container.onclick = (e) => {
+            e.stopPropagation();
+            MessageScanner.toggleFailedView(bubble);
+        };
+
+        bubble.innerHTML = '';
+        bubble.appendChild(container);
+    },
+
+    // Toggle between failed message and original encrypted text
+    toggleFailedView: (bubble) => {
+        const isShowingError = bubble.dataset.msShowError !== 'false';
+        const originalText = bubble.dataset.msOriginal;
+
+        if (isShowingError) {
+            // Show original encrypted text
+            bubble.innerHTML = '';
+
+            const container = document.createElement('div');
+            container.style.cssText = `position: relative;`;
+
+            const textDiv = document.createElement('div');
+            textDiv.style.cssText = `
+                font-size: 0.8em;
+                opacity: 0.6;
+                word-break: break-all;
+                color: #888;
+                max-height: 150px;
+                overflow-y: auto;
+                padding-right: 20px;
+            `;
+            textDiv.textContent = originalText;
+
+            const closeBtn = document.createElement('span');
+            closeBtn.textContent = '✕';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 0;
+                right: 0;
+                font-size: 10px;
+                color: #666;
+                cursor: pointer;
+                padding: 2px 4px;
+                border-radius: 3px;
+            `;
+            closeBtn.title = 'Скрыть оригинал';
+            closeBtn.onmouseenter = () => closeBtn.style.background = 'rgba(255,255,255,0.1)';
+            closeBtn.onmouseleave = () => closeBtn.style.background = 'transparent';
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                MessageScanner.toggleFailedView(bubble);
+            };
+
+            container.appendChild(textDiv);
+            container.appendChild(closeBtn);
+            bubble.appendChild(container);
+            bubble.dataset.msShowError = 'false';
+        } else {
+            // Show error message again
+            MessageScanner.renderFailed(bubble, originalText);
+            bubble.dataset.msShowError = 'true';
+        }
     },
 
     toggleDecryption: (bubble) => {

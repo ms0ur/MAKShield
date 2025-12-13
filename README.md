@@ -21,7 +21,9 @@ MAKShield is a browser extension that adds end-to-end encryption to MAX Messenge
 - 🔑 **PBKDF2 Key Derivation** - Secure password-based key generation with 100,000 iterations
 - 🔄 **ECDH Key Exchange** - Automatic secure key exchange using Elliptic Curve Diffie-Hellman (P-256)
 - 💬 **Per-Chat Keys** - Set different encryption keys for different conversations
-- 🎭 **Message Disguise** - Encrypted messages appear as regular URLs or log entries
+- 🎭 **Message Disguise** - Encrypted messages appear as regular URLs, crash logs, or system logs
+- 🧩 **Multipart Messages** - Data can be split across multiple locations in a message for better disguise
+- 📏 **Length Categories** - Presets optimized for short (<50), medium (50-200), and long (>200) messages
 - 🔒 **Local-Only Storage** - All keys stored locally using browser storage API
 - 📴 **Offline Capable** - No external dependencies or network calls
 
@@ -93,9 +95,27 @@ MAKShield is a browser extension that adds end-to-end encryption to MAX Messenge
 ### Disguise Presets
 
 Messages can be disguised as:
-- 🔗 **URLs**: Wildberries, Ozon, AliExpress, YouTube, VK, Google Docs
-- ☠️ **Crash Logs**: Java, Python, JavaScript, Rust
-- 📋 **System Logs**: Nginx, Docker, Kernel, Android, Git, SQL, SSL, Webpack
+
+**🔗 URL Links (21 presets):**
+- Wildberries, Ozon, AliExpress, YouTube, VK, Google Docs
+- Amazon, GitHub, Telegram, Reddit, Twitter/X, Яндекс.Маркет
+- Avito, Instagram, TikTok, Spotify, Notion, Discord, Steam, LinkedIn, Dropbox
+
+**☠️ Crash Logs (13 presets):**
+- Java, Python, JavaScript, Rust, Go, C#, Kotlin
+- Swift, PHP, Ruby, Scala, Elixir, Full Java Stack (×3 parts)
+
+**📋 System Logs (23 presets):**
+- Nginx, Docker, Kernel, Android, Git, SQL, SSL, Webpack
+- Kubernetes, Systemd, AWS CloudWatch, Elasticsearch, PostgreSQL
+- Redis, Apache, MongoDB, GraphQL, Terraform, Ansible, Jenkins
+- Prometheus, Sentry, Distributed Trace (×4), Microservices Log (×4)
+
+**📄 Other (9 presets):**
+- Hex Dump, Base64 Block, JWT Token, Network Packet, Core Dump
+- Debug Session (×3), API Request Log (×4), Security Audit (×4), Test Failure (×3)
+
+**Multipart presets** split encrypted data across multiple locations in the message (marked with ×N), making detection even harder.
 
 ### License
 
@@ -119,7 +139,9 @@ MAKShield - это расширение браузера, добавляющее
 - 🔑 **Деривация ключей PBKDF2** - Безопасная генерация ключей на основе пароля с 100,000 итерациями
 - 🔄 **Обмен ключами ECDH** - Автоматический безопасный обмен ключами через ECDH (P-256)
 - 💬 **Отдельные ключи для чатов** - Устанавливайте разные ключи шифрования для разных бесед
-- 🎭 **Маскировка сообщений** - Зашифрованные сообщения выглядят как обычные URL или логи
+- 🎭 **Маскировка сообщений** - Зашифрованные сообщения выглядят как обычные URL, crash-логи или системные логи
+- 🧩 **Multipart сообщения** - Данные могут быть разбиты на несколько мест в сообщении для лучшей маскировки
+- 📏 **Категории длины** - Пресеты оптимизированы для коротких (<50), средних (50-200) и длинных (>200) сообщений
 - 🔒 **Только локальное хранение** - Все ключи хранятся локально через API хранилища браузера
 - 📴 **Работа оффлайн** - Нет внешних зависимостей или сетевых запросов
 
@@ -191,9 +213,27 @@ MAKShield - это расширение браузера, добавляющее
 ### Пресеты маскировки
 
 Сообщения могут быть замаскированы под:
-- 🔗 **URL-ссылки**: Wildberries, Ozon, AliExpress, YouTube, VK, Google Docs
-- ☠️ **Crash-логи**: Java, Python, JavaScript, Rust
-- 📋 **Системные логи**: Nginx, Docker, Kernel, Android, Git, SQL, SSL, Webpack
+
+**🔗 URL-ссылки (21 пресет):**
+- Wildberries, Ozon, AliExpress, YouTube, VK, Google Docs
+- Amazon, GitHub, Telegram, Reddit, Twitter/X, Яндекс.Маркет
+- Avito, Instagram, TikTok, Spotify, Notion, Discord, Steam, LinkedIn, Dropbox
+
+**☠️ Crash-логи (13 пресетов):**
+- Java, Python, JavaScript, Rust, Go, C#, Kotlin
+- Swift, PHP, Ruby, Scala, Elixir, Full Java Stack (×3 части)
+
+**📋 Системные логи (23 пресета):**
+- Nginx, Docker, Kernel, Android, Git, SQL, SSL, Webpack
+- Kubernetes, Systemd, AWS CloudWatch, Elasticsearch, PostgreSQL
+- Redis, Apache, MongoDB, GraphQL, Terraform, Ansible, Jenkins
+- Prometheus, Sentry, Distributed Trace (×4), Microservices Log (×4)
+
+**📄 Другое (9 пресетов):**
+- Hex Dump, Base64 Block, JWT Token, Network Packet, Core Dump
+- Debug Session (×3), API Request Log (×4), Security Audit (×4), Test Failure (×3)
+
+**Multipart пресеты** разбивают зашифрованные данные на несколько мест в сообщении (помечены ×N), что затрудняет обнаружение.
 
 ### Лицензия
 

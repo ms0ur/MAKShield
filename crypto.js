@@ -160,10 +160,35 @@ const CryptoEngine = {
     },
 
     buildSpoofMessage: (preset, data) => {
-        const rnd = Math.floor(Math.random() * 900) + 100;
-        return preset.template
-            .replace(/\{RND\}/g, rnd.toString())
-            .replace(/\{DATA\}/g, data);
+        let result = preset.template;
+
+        // Replace all {RND} with random values (different for each occurrence)
+        while (result.includes('{RND}')) {
+            const rnd = Math.floor(Math.random() * 900) + 100;
+            result = result.replace('{RND}', rnd.toString());
+        }
+
+        // Handle multipart presets
+        if (preset.multipart && preset.parts && preset.parts >= 2) {
+            const parts = CryptoEngine.splitDataForMultipart(data, preset.parts);
+            for (let i = 0; i < preset.parts; i++) {
+                result = result.replace(`{DATA_${i + 1}}`, parts[i] || '');
+            }
+        } else {
+            result = result.replace(/\{DATA\}/g, data);
+        }
+
+        return result;
+    },
+
+    // Split data into parts for multipart presets
+    splitDataForMultipart: (data, numParts) => {
+        const partLength = Math.ceil(data.length / numParts);
+        const parts = [];
+        for (let i = 0; i < numParts; i++) {
+            parts.push(data.slice(i * partLength, (i + 1) * partLength));
+        }
+        return parts;
     },
 
     // Create ECDH key exchange message (unencrypted, just encoded)
@@ -276,18 +301,68 @@ const CryptoEngine = {
     },
 
     extractPayload: (text, preset) => {
+        // Handle multipart extraction
+        if (preset.multipart && preset.extractMulti && preset.parts >= 2) {
+            const parts = [];
+            for (let i = 0; i < preset.extractMulti.length; i++) {
+                const regex = preset.extractMulti[i];
+                const match = text.match(regex);
+                if (match && match[1]) {
+                    parts.push(match[1]);
+                    console.log(`[Shield] Multipart ${i+1}/${preset.parts} for ${preset.name}: found ${match[1].length} chars`);
+                } else {
+                    console.log(`[Shield] Multipart ${i+1}/${preset.parts} for ${preset.name}: NO MATCH for regex ${regex}`);
+                }
+            }
+            // If we got all parts, join them together
+            if (parts.length === preset.parts) {
+                console.log("[Shield] Multipart extraction for", preset.name, "SUCCESS, total:", parts.join('').length, "chars");
+                return parts.join('');
+            } else {
+                console.log("[Shield] Multipart extraction for", preset.name, "FAILED: got", parts.length, "of", preset.parts, "parts");
+            }
+        }
+
+        // Single part extraction with custom regex
         if (preset.extract) {
             const regex = typeof preset.extract === 'string'
                 ? new RegExp(preset.extract)
                 : preset.extract;
             const match = text.match(regex);
-            return match ? match[1] : null;
+            if (match && match[1]) {
+                console.log("[Shield] Extract regex matched for", preset.name, "got", match[1].length, "chars");
+                return match[1];
+            }
         }
 
+        // URL parameter extraction
         if (preset.param) {
-            const paramRegex = new RegExp(preset.param + '=([^&\\s]+)');
-            const match = text.match(paramRegex);
-            return match ? match[1] : null;
+            const paramName = preset.param;
+            const escapedParam = paramName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+            // Try different formats based on whether param ends with separator
+            let patterns;
+            if (paramName.endsWith('=') || paramName.endsWith('-') || paramName.endsWith('_')) {
+                // Param already has separator (like 'ref_=' or 'issuecomment-')
+                patterns = [
+                    new RegExp(escapedParam + '([^&\\s#]+)'),
+                ];
+            } else {
+                // Standard param without separator
+                patterns = [
+                    new RegExp(escapedParam + '=([^&\\s#]+)'),   // param=value
+                    new RegExp(escapedParam + '-([^&\\s#]+)'),   // param-value
+                    new RegExp(escapedParam + '([^&\\s#=]+)'),   // param followed directly by value
+                ];
+            }
+
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    console.log("[Shield] Param pattern matched for", preset.name, "got", match[1].length, "chars");
+                    return match[1];
+                }
+            }
         }
 
         return null;
@@ -299,22 +374,44 @@ const CryptoEngine = {
             const allPresets = [currentPreset, ...Object.values(SpoofPresets)];
 
             let payload = null;
+            let matchedPreset = null;
             for (const preset of allPresets) {
                 const extracted = CryptoEngine.extractPayload(text, preset);
                 if (extracted) {
                     payload = extracted;
+                    matchedPreset = preset;
+                    console.log("[Shield] Matched preset:", preset.name, "Extracted payload length:", extracted.length);
                     break;
                 }
             }
 
-            if (!payload) return null;
+            if (!payload) {
+                console.log("[Shield] No payload extracted from text");
+                return null;
+            }
 
-            const payloadJson = CryptoEngine.buf2str(
-                CryptoEngine.fromB64(decodeURIComponent(payload))
-            );
-            const pkg = JSON.parse(payloadJson);
+            let payloadJson;
+            try {
+                payloadJson = CryptoEngine.buf2str(
+                    CryptoEngine.fromB64(decodeURIComponent(payload))
+                );
+            } catch (e) {
+                console.log("[Shield] Failed to decode payload:", e.message);
+                return null;
+            }
 
-            if (pkg.v !== 1 && pkg.v !== 2) return null;
+            let pkg;
+            try {
+                pkg = JSON.parse(payloadJson);
+            } catch (e) {
+                console.log("[Shield] Failed to parse payload JSON:", e.message, "JSON:", payloadJson.substring(0, 100));
+                return null;
+            }
+
+            if (pkg.v !== 1 && pkg.v !== 2) {
+                console.log("[Shield] Invalid payload version:", pkg.v);
+                return null;
+            }
 
             const { key } = await CryptoEngine.importPassword(password, pkg.s);
             const iv = CryptoEngine.fromB64(pkg.iv);
@@ -326,6 +423,7 @@ const CryptoEngine = {
                 data
             );
 
+            console.log("[Shield] Decryption successful!");
             return {
                 type: 'text',
                 content: CryptoEngine.buf2str(decryptedBuf)

@@ -1,4 +1,6 @@
 const SendHandler = {
+    isHandling: false,
+
     extractText: (editor) => {
         let result = '';
 
@@ -32,34 +34,57 @@ const SendHandler = {
 
     handle: async (e) => {
         if (!ShieldState.isActive) return;
+        if (SendHandler.isHandling) {
+            // Already handling - allow the encrypted message to be sent
+            return;
+        }
 
         const editor = document.querySelector(ShieldSelectors.EDITOR);
         if (!editor) return;
 
         const rawText = SendHandler.extractText(editor);
-        if (!rawText || rawText.includes('wildberries.ru')) return;
+        if (!rawText) return;
 
+        // Synchronous quick check - if text looks encrypted, let it through
+        if (SendHandler.isAlreadyEncryptedSync(rawText)) {
+            return;
+        }
+
+        // Block original send immediately (before async operations)
         e.preventDefault();
         e.stopPropagation();
 
-        const password = await ShieldStorage.getChatPassword();
-        if (!password) {
-            ShieldUI.toast('Set password first!', 'error');
-            return;
+        SendHandler.isHandling = true;
+
+        try {
+            const password = await ShieldStorage.getChatPassword();
+            if (!password) {
+                ShieldUI.toast('Set password first!', 'error');
+                SendHandler.isHandling = false;
+                return;
+            }
+
+            const encryptedUrl = await CryptoEngine.encrypt(rawText, password);
+            if (!encryptedUrl) {
+                ShieldUI.toast('Encryption failed', 'error');
+                SendHandler.isHandling = false;
+                return;
+            }
+
+            SendHandler.insertIntoEditor(editor, encryptedUrl);
+
+            setTimeout(() => {
+                const btn = document.querySelector(ShieldSelectors.SEND_BTN);
+                if (btn) btn.click();
+
+                setTimeout(() => {
+                    SendHandler.isHandling = false;
+                }, 200);
+            }, 100);
+        } catch (err) {
+            console.error('[Shield] Send error:', err);
+            SendHandler.isHandling = false;
         }
-
-        const encryptedUrl = await CryptoEngine.encrypt(rawText, password);
-        if (!encryptedUrl) {
-            ShieldUI.toast('Encryption failed', 'error');
-            return;
-        }
-
-        SendHandler.insertIntoEditor(editor, encryptedUrl);
-
-        setTimeout(() => {
-            const btn = document.querySelector(ShieldSelectors.SEND_BTN);
-            if (btn) btn.click();
-        }, 100);
     },
 
     insertIntoEditor: (editor, text) => {
@@ -89,5 +114,29 @@ const SendHandler = {
                 }
             }, 10);
         }
+    },
+
+    // Synchronous check if text is already encrypted (uses cached preset)
+    isAlreadyEncryptedSync: (text) => {
+        // Check against all presets synchronously
+        for (const preset of Object.values(SpoofPresets)) {
+            if (!preset || !preset.detect) continue;
+            const hasAllDetect = preset.detect.every(d => text.includes(d));
+            if (hasAllDetect) return true;
+        }
+        return false;
+    },
+
+    // Check if text is already encrypted by checking against all preset detect patterns
+    isAlreadyEncrypted: async (text) => {
+        const currentPreset = await ShieldStorage.getSpoofPreset();
+        const allPresets = [currentPreset, ...Object.values(SpoofPresets)];
+
+        for (const preset of allPresets) {
+            if (!preset || !preset.detect) continue;
+            const hasAllDetect = preset.detect.every(d => text.includes(d));
+            if (hasAllDetect) return true;
+        }
+        return false;
     }
 };

@@ -28,7 +28,9 @@ The following data is stored **only in your browser** using `browser.storage.loc
 | Data | Purpose | Shared? |
 |------|---------|---------|
 | Encryption keys (per chat) | Decrypt messages in that chat | ❌ Never |
-| Selected disguise preset | Remember your preference | ❌ Never |
+| ECDH key pairs | Automatic key exchange with contacts | ❌ Never |
+| Key mode setting | Remember manual/auto mode preference | ❌ Never |
+| Selected disguise preset | Remember your disguise preference | ❌ Never |
 | Custom templates | Store user-created disguises | ❌ Never |
 
 ### Data NOT Collected
@@ -92,6 +94,8 @@ MAKShield обеспечивает сквозное шифрование соо�
 | Данные | Назначение | Передаются? |
 |--------|------------|-------------|
 | Ключи шифрования (по чатам) | Расшифровка сообщений в этом чате | ❌ Никогда |
+| ECDH ключевые пары | Автоматический обмен ключами | ❌ Никогда |
+| Настройка режима ключей | Запомнить режим (ручной/авто) | ❌ Никогда |
 | Выбранный пресет маскировки | Запомнить ваш выбор | ❌ Никогда |
 | Пользовательские шаблоны | Хранение созданных маскировок | ❌ Никогда |
 
