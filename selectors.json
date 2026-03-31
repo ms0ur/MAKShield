@@ -32,7 +32,7 @@
         "CONTAINER_CLASS": "ConvoHistory__dateStack",
         "BUBBLE_TEXT": ".MessageText",
         "EDITOR": ".ComposerInput__input[contenteditable=\"true\"]",
-        "SEND_BTN": "button.ConvoComposer__sendButton--mic",
+        "SEND_BTN": "button[class*=\"ConvoComposer__sendButton\"]",
         "EMOJI_BTN": "button.ConvoComposer__button--stickersKeyboard"
       },
       "chatIdRegex": "/convo/(\\d+)"

@@ -147,7 +147,7 @@ const MessageScanner = {
             for (const bubble of bubbles) {
                 if (bubble.dataset.msDecrypted) continue;
 
-                const text = bubble.innerText;
+                const text = MessageScanner.extractFullText(bubble);
 
                 const isEncrypted = await MessageScanner.isEncryptedMessage(text);
                 if (isEncrypted) {
@@ -193,7 +193,7 @@ const MessageScanner = {
         for (const bubble of bubbles) {
             if (bubble.dataset.msDecrypted) continue;
 
-            const text = bubble.innerText;
+            const text = MessageScanner.extractFullText(bubble);
             const isEncrypted = await MessageScanner.isEncryptedMessage(text);
 
             if (isEncrypted) {
@@ -204,6 +204,30 @@ const MessageScanner = {
                 }
             }
         }
+    },
+
+    // Extract text safely, handling VK/MAX truncation via URL wrappers
+    extractFullText: (bubble) => {
+        // VK and MAX might wrap long links in an <a> tag and visually truncate the innerText.
+        const link = bubble.querySelector('a');
+        if (link) {
+            try {
+                const urlStr = link.getAttribute('href'); 
+                // In VK mobile, clicking external link redirects to away.php
+                if (urlStr && urlStr.includes('away.php')) {
+                    const url = new URL(link.href, window.location.origin);
+                    if (url.searchParams.has('to')) {
+                        return decodeURIComponent(url.searchParams.get('to')); // This gives us back the full spoofed URL
+                    }
+                } else if (urlStr && urlStr.startsWith('http')) {
+                    // For MAX or other cases, the href is intact even if text is truncated
+                    return urlStr;
+                }
+            } catch (e) {
+                // Ignore parse errors, fallback to innerText
+            }
+        }
+        return bubble.innerText;
     },
 
     renderDecrypted: (bubble, result, originalText) => {

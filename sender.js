@@ -79,14 +79,29 @@ const SendHandler = {
 
             SendHandler.insertIntoEditor(editor, encryptedUrl);
 
+            // Notify the app that editor content changed
+            // (VK Desktop React needs this to update send button state)
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: encryptedUrl }));
+
+            // Wait for VK to react to content change (update send button class)
             setTimeout(() => {
                 const btn = document.querySelector(ShieldSelectors.SEND_BTN);
-                if (btn) btn.click();
+                if (btn) {
+                    btn.click();
+                } else {
+                    // Fallback: try Enter key on editor
+                    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                }
 
+                // Re-scan messages after send so our encrypted message gets decrypted
                 setTimeout(() => {
                     SendHandler.isHandling = false;
-                }, 200);
-            }, 100);
+                    if (typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
+                        MessageScanner.scan();
+                    }
+                }, 500);
+            }, 250);
         } catch (err) {
             console.error('[Shield] Send error:', err);
             SendHandler.isHandling = false;

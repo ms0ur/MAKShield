@@ -58,6 +58,10 @@ function startObserver() {
 
         for (const container of containers) {
             if (!ShieldState.observedContainers.has(container)) {
+                // Throttle scan inside observer callback to prevent excess CPU usage
+                const scanThrottled = typeof MessageScanner !== 'undefined' ? 
+                    MessageScanner.throttle(MessageScanner.scan, 800) : null;
+
                 const chatObserver = new MutationObserver((mutations) => {
                     const hasRelevant = mutations.some(m => {
                         if (m.type === 'childList') {
@@ -71,12 +75,12 @@ function startObserver() {
                         }
                         return false;
                     });
-                    if (hasRelevant) scanMessagesThrottled();
+                    if (hasRelevant && scanThrottled) scanThrottled();
                 });
 
                 chatObserver.observe(container, { childList: true, subtree: true });
                 ShieldState.observedContainers.add(container);
-                scanMessages();
+                if (typeof MessageScanner !== 'undefined') MessageScanner.scan();
             }
         }
     });

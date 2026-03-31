@@ -50,6 +50,20 @@ const ShieldUI = {
             <div id="ms-service-info" style="font-size: 8px; color: #555; text-align: center; margin-top: 2px;">
                 <span id="ms-service-name"></span>
             </div>
+            <div id="ms-shield-input-wrap" style="display: none; margin-top: 6px;">
+                <div style="display: flex; gap: 4px; align-items: flex-end;">
+                    <textarea id="ms-shield-input" placeholder="Зашифрованное сообщение..." rows="2"
+                        style="flex: 1; resize: vertical; min-height: 28px; max-height: 120px; padding: 6px 8px;
+                        border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3);
+                        color: #eee; font-size: 12px; font-family: inherit; outline: none;"></textarea>
+                    <button id="ms-shield-send" title="Отправить зашифрованное"
+                        style="padding: 6px 10px; border-radius: 8px; border: none; background: #4CAF50;
+                        color: white; cursor: pointer; font-size: 14px; line-height: 1; white-space: nowrap;">📤</button>
+                </div>
+                <div style="font-size: 8px; color: #666; text-align: center; margin-top: 2px;">
+                    Введите сообщение здесь — оно будет зашифровано и отправлено
+                </div>
+            </div>
         </div>
         <div id="ms-key-menu" style="display: none;">
             <div class="ms-spoof-title">🔐 Режим ключей</div>
@@ -557,12 +571,13 @@ const ShieldUI = {
             ShieldUI.updateIndicator(true);
             ShieldUI.updateEmojiButton(true);
             ShieldUI.updateToggleButton(true);
+            ShieldUI.updateShieldInput(true);
             ShieldUI.updateKeyModeDisplay();
             document.getElementById('ms-key-menu').style.display = 'none';
             ShieldUI.toast('🔑 Ручной ключ установлен!');
 
-            if (typeof scanMessages === 'function') {
-                scanMessages();
+            if (typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
+                MessageScanner.scan();
             }
         };
 
@@ -573,6 +588,7 @@ const ShieldUI = {
             ShieldState.isActive = false;
             ShieldUI.updateIndicator(false);
             ShieldUI.updateEmojiButton(false);
+            ShieldUI.updateShieldInput(false);
             ShieldUI.updateKeyModeDisplay();
             document.getElementById('ms-manual-password').value = '';
             document.getElementById('ms-key-menu').style.display = 'none';
@@ -582,6 +598,7 @@ const ShieldUI = {
         // Auto mode - send ECDH public key
         document.getElementById('ms-ecdh-send').onclick = async () => {
             await ShieldUI.sendECDHKey();
+            ShieldUI.updateShieldInput(false); // Can only send messages when keys are fully agreed
         };
 
         // Auto mode - reset ECDH keys
@@ -591,6 +608,7 @@ const ShieldUI = {
             ShieldState.isActive = false;
             ShieldUI.updateIndicator(false);
             ShieldUI.updateEmojiButton(false);
+            ShieldUI.updateShieldInput(false);
             ShieldUI.updateKeyModeDisplay();
             ShieldUI.updateECDHStatus();
             ShieldUI.toast('ECDH ключи сброшены', 'error');
@@ -622,17 +640,31 @@ const ShieldUI = {
             ShieldUI.updateIndicator(newState);
             ShieldUI.updateEmojiButton(newState);
             ShieldUI.updateToggleButton(newState);
+            ShieldUI.updateShieldInput(newState);
 
             ShieldUI.toast(newState ? 'Шифрование включено 🔒' : 'Шифрование выключено 🔓');
 
-            if (newState && typeof scanMessages === 'function') {
-                scanMessages();
+            if (newState && typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
+                MessageScanner.scan();
             }
         };
 
         spoofBtn.onclick = () => {
             ShieldUI.toggleSpoofMenu();
         };
+
+        // Shield custom input — send button
+        document.getElementById('ms-shield-send').onclick = async () => {
+            await ShieldUI.handleShieldSend();
+        };
+
+        // Shield custom input — Enter to send (Shift+Enter for newline)
+        document.getElementById('ms-shield-input').addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                await ShieldUI.handleShieldSend();
+            }
+        });
 
         document.getElementById('ms-spoof-custom').onclick = () => {
             ShieldUI.showCustomSpoofModal();
@@ -769,12 +801,13 @@ const ShieldUI = {
                         ShieldUI.updateIndicator(true);
                         ShieldUI.updateEmojiButton(true);
                         ShieldUI.updateToggleButton(true);
+                        ShieldUI.updateShieldInput(true);
                         ShieldUI.updateKeyModeDisplay();
                         ShieldUI.toast('🔐 Ключи согласованы!');
 
                         setTimeout(() => {
-                            if (typeof scanMessages === 'function') {
-                                scanMessages();
+                            if (typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
+                                MessageScanner.scan();
                             }
                         }, 500);
                     }
@@ -1055,8 +1088,8 @@ const ShieldUI = {
         ShieldUI.updateToggleButton(isEnabled);
         ShieldUI.updateKeyModeDisplay();
 
-        if (isEnabled && typeof scanMessages === 'function') {
-            scanMessages();
+        if (isEnabled && typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
+            MessageScanner.scan();
         } else {
             // Still scan for ECDH key messages even when not enabled
             if (typeof MessageScanner !== 'undefined' && MessageScanner.scanForECDH) {
@@ -1066,13 +1099,11 @@ const ShieldUI = {
     },
 
     updateEmojiButton: (encryptionActive) => {
-        // TODO: VK селекторы — проверить актуальный selector для кнопки эмодзи
         const emojiBtn = document.querySelector(ShieldSelectors.EMOJI_BTN);
         if (emojiBtn) {
-            const wrapper = emojiBtn.closest('.btn') || emojiBtn.parentElement;
-            if (wrapper) {
-                wrapper.style.display = encryptionActive ? 'none' : '';
-            }
+            // Hide only the button itself — never a parent wrapper
+            // (in VK Mobile, parentElement is uMailWrite__main which contains the entire input area)
+            emojiBtn.style.display = encryptionActive ? 'none' : '';
         }
     },
 
@@ -1080,6 +1111,79 @@ const ShieldUI = {
         const icon = document.getElementById('ms-toggle-icon');
         if (icon) {
             icon.textContent = enabled ? '⏸️' : '▶️';
+        }
+    },
+
+    // Show/hide the custom Shield input field
+    updateShieldInput: (encryptionActive) => {
+        const wrap = document.getElementById('ms-shield-input-wrap');
+        if (wrap) {
+            wrap.style.display = encryptionActive ? 'block' : 'none';
+        }
+    },
+
+    // Handle send from the custom Shield input
+    handleShieldSend: async () => {
+        const input = document.getElementById('ms-shield-input');
+        const rawText = (input.value || '').trim();
+        if (!rawText) return;
+
+        const password = await ShieldStorage.getChatPassword();
+        if (!password) {
+            ShieldUI.toast('Сначала установите ключ!', 'error');
+            return;
+        }
+
+        try {
+            const encryptedUrl = await CryptoEngine.encrypt(rawText, password);
+            if (!encryptedUrl) {
+                ShieldUI.toast('Ошибка шифрования', 'error');
+                return;
+            }
+
+            // Inject into the real editor
+            const editor = document.querySelector(ShieldSelectors.EDITOR);
+            if (!editor) {
+                ShieldUI.toast('Поле ввода не найдено', 'error');
+                return;
+            }
+
+            // Set isHandling to skip our own interception
+            SendHandler.isHandling = true;
+
+            SendHandler.insertIntoEditor(editor, encryptedUrl);
+
+            // Dispatch input events so VK recognizes the text
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: encryptedUrl }));
+
+            // Clear our input immediately
+            input.value = '';
+
+            // Wait for VK to update, then click send
+            setTimeout(() => {
+                const btn = document.querySelector(ShieldSelectors.SEND_BTN);
+                if (btn) {
+                    btn.click();
+                } else {
+                    // Fallback: submit form (VK Mobile)
+                    const form = editor.closest('form');
+                    if (form) form.submit();
+                }
+
+                setTimeout(() => {
+                    SendHandler.isHandling = false;
+                    if (typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
+                        MessageScanner.scan();
+                    }
+                }, 500);
+            }, 300);
+
+            ShieldUI.toast('Зашифровано и отправлено 📨');
+        } catch (err) {
+            console.error('[Shield] Custom send error:', err);
+            ShieldUI.toast('Ошибка отправки', 'error');
+            SendHandler.isHandling = false;
         }
     },
 
@@ -1092,6 +1196,7 @@ const ShieldUI = {
 
         ShieldState.isActive = isEnabled;
         ShieldUI.updateIndicator(isEnabled);
+        ShieldUI.updateShieldInput(isEnabled);
         ShieldUI.updateEmojiButton(isEnabled);
         ShieldUI.updateToggleButton(isEnabled);
         ShieldUI.updateKeyModeDisplay();
