@@ -1,27 +1,38 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "MAKShield",
-  "version": "0.2.4",
-  "description": "E2E Encryption for MAX Messenger (WEB). All encryption happens locally - no data is collected or transmitted to external servers.",
+  "version": "0.3.0",
+  "description": "E2E Encryption for MAX & VK Messengers (WEB). All encryption happens locally - no data is collected or transmitted to external servers.",
   "author": "ms0ur",
   "homepage_url": "https://github.com/ms0ur/MakShield",
   "browser_specific_settings": {
     "gecko": {
       "id": "makshield@ms0ur",
-      "strict_min_version": "57.0"
+      "strict_min_version": "109.0"
+    },
+    "gecko_android": {
+      "strict_min_version": "120.0"
     }
   },
   "permissions": [
-    "storage",
-    "https://web.max.ru/*"
+    "storage"
+  ],
+  "host_permissions": [
+    "https://web.max.ru/*",
+    "https://vk.com/*",
+    "https://vk.ru/*",
+    "https://m.vk.com/*",
+    "https://m.vk.ru/*"
   ],
   "web_accessible_resources": [
-    "maksicon.png",
-    "maksbanner.png"
+    {
+      "resources": ["maksicon.png", "maksbanner.png", "selectors.json"],
+      "matches": ["https://web.max.ru/*", "https://vk.com/*", "https://vk.ru/*", "https://m.vk.com/*", "https://m.vk.ru/*"]
+    }
   ],
   "content_scripts": [
     {
-      "matches": ["https://web.max.ru/*"],
+      "matches": ["https://web.max.ru/*", "https://vk.com/*", "https://vk.ru/*", "https://m.vk.com/*", "https://m.vk.ru/*"],
       "js": [
         "presets.js",
         "crypto.js",

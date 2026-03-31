@@ -93,7 +93,7 @@ const SpoofPresets = {
     twitter: {
         name: 'Twitter/X',
         template: 'https://x.com/user/status/{RND}?s={DATA}',
-        detect: ['x.com', 's='],
+        detect: ['x.com/', '/status/', 's='],
         param: 's',
         lengthCategory: 'short',
         maxDataLength: 400,
@@ -179,6 +179,24 @@ const SpoofPresets = {
         lengthCategory: 'medium',
         maxDataLength: 600,
         description: 'Маскировка под пост LinkedIn'
+    },
+    vk_clip: {
+        name: 'VK Клип',
+        template: 'https://vk.com/clip-{RND}_{RND}?ref={DATA}',
+        detect: ['vk.com/clip', 'ref='],
+        param: 'ref',
+        lengthCategory: 'medium',
+        maxDataLength: 600,
+        description: 'Маскировка под VK клип'
+    },
+    vk_music: {
+        name: 'VK Музыка',
+        template: 'https://vk.com/audio{RND}_{RND}?share={DATA}',
+        detect: ['vk.com/audio', 'share='],
+        param: 'share',
+        lengthCategory: 'medium',
+        maxDataLength: 500,
+        description: 'Маскировка под VK аудио'
     },
     dropbox: {
         name: 'Dropbox',
@@ -893,7 +911,7 @@ Playbook context: {DATA_2}`,
         detect: ['fatal:', 'PLAY RECAP'],
         extractMulti: [
             /"msg": "Failed to connect to the host via ssh: ([^"]+)"/,
-            /Playback context: ([^\n]+)/
+            /Playbook context: ([^\n]+)/
         ],
         parts: 2,
         lengthCategory: 'medium',

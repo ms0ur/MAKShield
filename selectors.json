@@ -1,0 +1,41 @@
+{
+  "services": {
+    "max": {
+      "name": "MAX Messenger",
+      "hostPatterns": ["web.max.ru"],
+      "selectors": {
+        "CONTAINER_CLASS": "scrollListContent",
+        "BUBBLE_TEXT": ".bubble .text",
+        "EDITOR": ".contenteditable[data-lexical-editor=\"true\"]",
+        "SEND_BTN": "button[aria-label=\"Отправить сообщение\"]",
+        "EMOJI_BTN": "button[aria-label=\"Открыть меню стикеров\"]"
+      },
+      "chatIdRegex": "\\/(\\d+)"
+    },
+    "vk_mobile": {
+      "name": "VK Mobile",
+      "hostPatterns": ["m.vk.com", "m.vk.ru"],
+      "selectors": {
+        "CONTAINER_CLASS": "mailScrap__items",
+        "BUBBLE_TEXT": ".mi_text",
+        "EDITOR": "textarea.uMailWrite__textarea",
+        "SEND_BTN": "button.uMailWrite__buttonSend",
+        "EMOJI_BTN": ".uMailWrite__buttonStickers"
+      },
+      "chatIdRegex": "peer=(\\d+)",
+      "editorType": "textarea"
+    },
+    "vk": {
+      "name": "VK Desktop",
+      "hostPatterns": ["vk.com", "vk.ru"],
+      "selectors": {
+        "CONTAINER_CLASS": "ConvoHistory__dateStack",
+        "BUBBLE_TEXT": ".MessageText",
+        "EDITOR": ".ComposerInput__input[contenteditable=\"true\"]",
+        "SEND_BTN": "button.ConvoComposer__sendButton--mic",
+        "EMOJI_BTN": "button.ConvoComposer__button--stickersKeyboard"
+      },
+      "chatIdRegex": "/convo/(\\d+)"
+    }
+  }
+}

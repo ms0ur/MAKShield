@@ -2,6 +2,12 @@ const SendHandler = {
     isHandling: false,
 
     extractText: (editor) => {
+        // Textarea (VK Mobile) — use .value directly
+        if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
+            return (editor.value || '').trim();
+        }
+
+        // Contenteditable (MAX, VK Desktop) — walk DOM
         let result = '';
 
         const walk = (node) => {
@@ -59,14 +65,14 @@ const SendHandler = {
         try {
             const password = await ShieldStorage.getChatPassword();
             if (!password) {
-                ShieldUI.toast('Set password first!', 'error');
+                ShieldUI.toast('Сначала установите ключ!', 'error');
                 SendHandler.isHandling = false;
                 return;
             }
 
             const encryptedUrl = await CryptoEngine.encrypt(rawText, password);
             if (!encryptedUrl) {
-                ShieldUI.toast('Encryption failed', 'error');
+                ShieldUI.toast('Ошибка шифрования', 'error');
                 SendHandler.isHandling = false;
                 return;
             }
@@ -88,6 +94,15 @@ const SendHandler = {
     },
 
     insertIntoEditor: (editor, text) => {
+        // Textarea (VK Mobile)
+        if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
+            editor.value = text;
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            editor.dispatchEvent(new Event('change', { bubbles: true }));
+            return;
+        }
+
+        // Contenteditable (MAX, VK Desktop)
         editor.focus();
 
         const selection = window.getSelection();

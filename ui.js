@@ -37,12 +37,18 @@ const ShieldUI = {
                 <button id="ms-spoof-btn" title="Выбрать маскировку">
                     🎭
                 </button>
+                <button id="ms-settings-btn" title="Настройки селекторов">
+                    ⚙️
+                </button>
             </div>
             <div id="ms-key-mode-info" style="font-size: 9px; color: #888; text-align: center; margin-bottom: 2px;">
                 <span id="ms-key-mode-status">🔑 Нет ключа</span>
             </div>
             <div id="ms-spoof-info" style="font-size: 9px; color: #888; text-align: center;">
                 <span id="ms-spoof-name">Wildberries</span>
+            </div>
+            <div id="ms-service-info" style="font-size: 8px; color: #555; text-align: center; margin-top: 2px;">
+                <span id="ms-service-name"></span>
             </div>
         </div>
         <div id="ms-key-menu" style="display: none;">
@@ -632,6 +638,17 @@ const ShieldUI = {
             ShieldUI.showCustomSpoofModal();
         };
 
+        // Settings button
+        document.getElementById('ms-settings-btn').onclick = () => {
+            ShieldUI.showSelectorSettings();
+        };
+
+        // Show service name
+        const serviceEl = document.getElementById('ms-service-name');
+        if (serviceEl && ShieldState.serviceConfig) {
+            serviceEl.textContent = ShieldState.serviceConfig.name;
+        }
+
         let lastChatId = ShieldStorage.getCurrentChatId();
         setInterval(async () => {
             const currentChatId = ShieldStorage.getCurrentChatId();
@@ -859,10 +876,10 @@ const ShieldUI = {
         otherContainer.innerHTML = '';
 
         // All URL presets
-        const urlPresets = ['wildberries', 'ozon', 'aliexpress', 'youtube', 'vk', 'google',
-                           'amazon', 'github', 'telegram', 'reddit', 'twitter', 'yandex_market',
-                           'avito', 'instagram', 'tiktok', 'spotify', 'notion', 'discord',
-                           'steam', 'linkedin', 'dropbox'];
+        const urlPresets = ['wildberries', 'ozon', 'aliexpress', 'youtube', 'vk', 'vk_clip',
+                           'vk_music', 'google', 'amazon', 'github', 'telegram', 'reddit',
+                           'twitter', 'yandex_market', 'avito', 'instagram', 'tiktok', 'spotify',
+                           'notion', 'discord', 'steam', 'linkedin', 'dropbox'];
         // All crash presets
         const crashPresets = ['crashlog_java', 'crashlog_python', 'crashlog_js', 'crashlog_rust',
                              'crashlog_go', 'crashlog_csharp', 'crashlog_kotlin', 'crashlog_swift',
@@ -1049,9 +1066,10 @@ const ShieldUI = {
     },
 
     updateEmojiButton: (encryptionActive) => {
-        const emojiBtn = document.querySelector('button[aria-label="Открыть меню стикеров"]');
+        // TODO: VK селекторы — проверить актуальный selector для кнопки эмодзи
+        const emojiBtn = document.querySelector(ShieldSelectors.EMOJI_BTN);
         if (emojiBtn) {
-            const wrapper = emojiBtn.closest('.btn');
+            const wrapper = emojiBtn.closest('.btn') || emojiBtn.parentElement;
             if (wrapper) {
                 wrapper.style.display = encryptionActive ? 'none' : '';
             }
@@ -1224,6 +1242,91 @@ const ShieldUI = {
                 });
                 break;
         }
+    },
+
+    // ---- Selector Settings Modal ----
+    showSelectorSettings: () => {
+        const existing = document.querySelector('.ms-modal-overlay');
+        if (existing) existing.remove();
+
+        const s = ShieldSelectors;
+        const serviceName = ShieldState.serviceConfig?.name || 'Unknown';
+        const serviceId = ShieldState.currentService || 'unknown';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'ms-modal-overlay';
+        overlay.innerHTML = `
+            <div class="ms-modal">
+                <div class="ms-modal-title">⚙️ Селекторы — ${serviceName}</div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Контейнер сообщений (className)</label>
+                    <input type="text" class="ms-modal-input" id="ms-sel-container" value="${s.CONTAINER_CLASS}">
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Текст сообщения (CSS selector)</label>
+                    <input type="text" class="ms-modal-input" id="ms-sel-bubble" value="${s.BUBBLE_TEXT}">
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Редактор ввода (CSS selector)</label>
+                    <input type="text" class="ms-modal-input" id="ms-sel-editor" value="${s.EDITOR.replace(/"/g, '&quot;')}">
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Кнопка отправки (CSS selector)</label>
+                    <input type="text" class="ms-modal-input" id="ms-sel-send" value="${s.SEND_BTN.replace(/"/g, '&quot;')}">
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Кнопка эмодзи (CSS selector)</label>
+                    <input type="text" class="ms-modal-input" id="ms-sel-emoji" value="${s.EMOJI_BTN.replace(/"/g, '&quot;')}">
+                </div>
+                <div class="ms-modal-field">
+                    <label class="ms-modal-label">Regex Chat ID</label>
+                    <input type="text" class="ms-modal-input" id="ms-sel-chatid" value="${s.CHAT_ID_REGEX}">
+                    <div class="ms-modal-hint">Группа (1) должна захватывать ID чата</div>
+                </div>
+                <div class="ms-modal-buttons">
+                    <button class="ms-modal-btn" id="ms-sel-cancel">Отмена</button>
+                    <button class="ms-modal-btn" id="ms-sel-reset" style="color: #f88;">Сбросить</button>
+                    <button class="ms-modal-btn primary" id="ms-sel-save">💾 Сохранить</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        document.getElementById('ms-sel-cancel').onclick = () => overlay.remove();
+
+        document.getElementById('ms-sel-reset').onclick = async () => {
+            await ShieldStorage.clearSelectorOverrides(serviceId);
+            if (ShieldState.defaultSelectors) {
+                Object.assign(ShieldSelectors, ShieldState.defaultSelectors);
+            }
+            overlay.remove();
+            ShieldUI.toast('Селекторы сброшены к дефолтным. Перезагрузите страницу.');
+            setTimeout(() => window.location.reload(), 1500);
+        };
+
+        document.getElementById('ms-sel-save').onclick = async () => {
+            const overrides = {
+                CONTAINER_CLASS: document.getElementById('ms-sel-container').value.trim(),
+                BUBBLE_TEXT: document.getElementById('ms-sel-bubble').value.trim(),
+                EDITOR: document.getElementById('ms-sel-editor').value.trim(),
+                SEND_BTN: document.getElementById('ms-sel-send').value.trim(),
+                EMOJI_BTN: document.getElementById('ms-sel-emoji').value.trim(),
+                CHAT_ID_REGEX: document.getElementById('ms-sel-chatid').value.trim()
+            };
+
+            // Remove empty values (keep defaults)
+            for (const k of Object.keys(overrides)) {
+                if (!overrides[k]) delete overrides[k];
+            }
+
+            await ShieldStorage.setSelectorOverrides(serviceId, overrides);
+            Object.assign(ShieldSelectors, overrides);
+            overlay.remove();
+            ShieldUI.toast('Селекторы сохранены! Перезагрузите страницу.');
+            setTimeout(() => window.location.reload(), 1500);
+        };
     },
 
     currentFilter: 'all',
