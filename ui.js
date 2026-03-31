@@ -593,6 +593,9 @@ const ShieldUI = {
             document.getElementById('ms-manual-password').value = '';
             document.getElementById('ms-key-menu').style.display = 'none';
             ShieldUI.toast('Ключ удалён', 'error');
+            if (typeof MessageScanner !== 'undefined' && MessageScanner.resetAllMessages) {
+                MessageScanner.resetAllMessages();
+            }
         };
 
         // Auto mode - send ECDH public key
@@ -612,6 +615,9 @@ const ShieldUI = {
             ShieldUI.updateKeyModeDisplay();
             ShieldUI.updateECDHStatus();
             ShieldUI.toast('ECDH ключи сброшены', 'error');
+            if (typeof MessageScanner !== 'undefined' && MessageScanner.resetAllMessages) {
+                MessageScanner.resetAllMessages();
+            }
         };
 
         // Filter buttons handler (delegated event)
@@ -644,8 +650,14 @@ const ShieldUI = {
 
             ShieldUI.toast(newState ? 'Шифрование включено 🔒' : 'Шифрование выключено 🔓');
 
-            if (newState && typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
-                MessageScanner.scan();
+            if (newState) {
+                if (typeof MessageScanner !== 'undefined' && MessageScanner.scan) {
+                    MessageScanner.scan();
+                }
+            } else {
+                if (typeof MessageScanner !== 'undefined' && MessageScanner.resetAllMessages) {
+                    MessageScanner.resetAllMessages();
+                }
             }
         };
 

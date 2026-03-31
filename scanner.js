@@ -34,6 +34,13 @@ const MessageScanner = {
 
             // Check if we already have this peer's key
             const ecdhData = await ShieldStorage.getECDHData();
+
+            // Check if this is OUR own key we sent
+            if (ecdhData && ecdhData.myPublicKey === peerPublicKeyB64) {
+                MessageScanner.renderECDHMessage(bubble, 'sent', peerPublicKeyB64);
+                return true;
+            }
+
             if (ecdhData && ecdhData.peerPublicKey === peerPublicKeyB64) {
                 // Already have this key, just show indicator
                 MessageScanner.renderECDHMessage(bubble, 'received', peerPublicKeyB64);
@@ -46,9 +53,12 @@ const MessageScanner = {
             // Generate fingerprint for display
             const fingerprint = await ECDHEngine.generateFingerprint(peerPublicKeyB64);
 
-            // Check if we can derive shared secret now
+            // Fetch latest data and keyMode
             const updatedEcdhData = await ShieldStorage.getECDHData();
-            if (updatedEcdhData && updatedEcdhData.myPrivateKey && updatedEcdhData.peerPublicKey) {
+            const keyMode = await ShieldStorage.getKeyMode(chatId);
+
+            // Only derive if we are in AUTO mode
+            if (keyMode === 'auto' && updatedEcdhData && updatedEcdhData.myPrivateKey && updatedEcdhData.peerPublicKey) {
                 // We have both keys, derive shared secret
                 const privateKey = await ECDHEngine.importPrivateKey(updatedEcdhData.myPrivateKey);
                 const peerPublicKey = await ECDHEngine.importPublicKey(updatedEcdhData.peerPublicKey);
@@ -78,7 +88,7 @@ const MessageScanner = {
                         }, 500);
                     }
                 }
-            } else {
+            } else if (keyMode === 'auto') {
                 // We received peer's key but haven't sent ours yet
                 if (typeof ShieldUI !== 'undefined') {
                     ShieldUI.toast(`🔑 Получен ключ [${fingerprint}]. Отправьте свой!`);
@@ -97,30 +107,37 @@ const MessageScanner = {
     // Render ECDH key exchange message
     renderECDHMessage: async (bubble, type, publicKeyB64) => {
         const fingerprint = await ECDHEngine.generateFingerprint(publicKeyB64);
-        const originalText = bubble.innerText;
+        const originalText = MessageScanner.getTextWithNewlines ? MessageScanner.getTextWithNewlines(bubble) : bubble.innerText;
 
-        bubble.innerHTML = '';
+        MessageScanner.hideOriginalContent(bubble);
+        bubble.querySelectorAll('.ms-injected-container').forEach(el => el.remove());
+
         bubble.dataset.msDecrypted = 'ecdh';
         bubble.dataset.msOriginal = originalText;
 
         const container = document.createElement('div');
-        container.className = 'ms-ecdh-container';
+        container.className = 'ms-injected-container ms-ecdh-container';
         container.style.cssText = `
-            padding: 8px 12px;
-            background: linear-gradient(135deg, rgba(0,100,255,0.1), rgba(0,200,100,0.1));
-            border-radius: 8px;
-            border: 1px solid rgba(0,150,255,0.3);
+            padding: 8px 12px !important;
+            background: linear-gradient(135deg, rgba(0,100,255,0.1), rgba(0,200,100,0.1)) !important;
+            border-radius: 8px !important;
+            border: 1px solid rgba(0,150,255,0.3) !important;
+            display: block !important;
+            margin: 4px 0 !important;
+            width: fit-content !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
         `;
 
         const icon = type === 'received' ? '📥' : '📤';
         const label = type === 'received' ? 'Получен ключ' : 'Отправлен ключ';
 
         container.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 16px;">${icon}</span>
-                <div>
-                    <div style="color: #0af; font-size: 11px; font-weight: bold;">🔐 ECDH ${label}</div>
-                    <div style="color: #888; font-size: 10px; font-family: monospace;">
+            <div style="display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; margin: 0 !important; padding: 0 !important;">
+                <span style="font-size: 16px !important; line-height: 1 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin: 0 !important; padding: 0 !important;">${icon}</span>
+                <div style="display: flex !important; flex-direction: column !important; margin: 0 !important; padding: 0 !important; align-items: flex-start !important; justify-content: center !important;">
+                    <div style="color: #0af !important; font-size: 11px !important; font-weight: bold !important; line-height: 1.2 !important; margin: 0 !important; padding: 0 !important;">🔐 ECDH ${label}</div>
+                    <div style="color: #888 !important; font-size: 10px !important; font-family: monospace !important; line-height: 1.2 !important; margin: 0 !important; padding: 0 !important; margin-top: 2px !important;">
                         Fingerprint: ${fingerprint}
                     </div>
                 </div>
@@ -206,39 +223,119 @@ const MessageScanner = {
         }
     },
 
+    getTextWithNewlines: (node) => {
+        let text = '';
+        const walk = (n) => {
+            if (n.nodeType === Node.TEXT_NODE) {
+                text += n.textContent;
+            } else if (n.nodeType === Node.ELEMENT_NODE) {
+                if (n.classList?.contains('ms-injected-container') || 
+                    n.classList?.contains('im-mess__more') ||
+                    n.classList?.contains('PostTextMore') ||
+                    n.classList?.contains('pi_more')) {
+                    return;
+                }
+                if (n.tagName === 'BR') {
+                    text += '\n';
+                } else if (n.tagName === 'DIV' || n.tagName === 'P') {
+                    if (text.length > 0 && !text.endsWith('\n')) text += '\n';
+                    n.childNodes.forEach(walk);
+                    if (text.length > 0 && !text.endsWith('\n')) text += '\n';
+                } else {
+                    n.childNodes.forEach(walk);
+                }
+            }
+        };
+        walk(node);
+        return text;
+    },
+
+    hideOriginalContent: (bubble) => {
+        if (bubble.dataset.msHiddenContent === 'true') return;
+        
+        Array.from(bubble.childNodes).forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const span = document.createElement('span');
+                span.className = 'ms-original-text';
+                span.style.display = 'none';
+                node.parentNode.insertBefore(span, node);
+                span.appendChild(node);
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (!node.classList.contains('ms-injected-container')) {
+                    node.dataset.msOriginalDisplay = node.style.display || '';
+                    node.style.display = 'none';
+                    node.classList.add('ms-original-element');
+                }
+            }
+        });
+        bubble.dataset.msHiddenContent = 'true';
+    },
+
+    restoreOriginalContent: (bubble) => {
+        if (bubble.dataset.msHiddenContent !== 'true') return;
+
+        bubble.querySelectorAll('.ms-original-text').forEach(span => {
+            while (span.firstChild) {
+                span.parentNode.insertBefore(span.firstChild, span);
+            }
+            span.remove();
+        });
+
+        bubble.querySelectorAll('.ms-original-element').forEach(el => {
+            el.style.display = el.dataset.msOriginalDisplay || '';
+            delete el.dataset.msOriginalDisplay;
+            el.classList.remove('ms-original-element');
+        });
+
+        delete bubble.dataset.msHiddenContent;
+    },
+
+    resetAllMessages: () => {
+        const bubbles = document.querySelectorAll(ShieldSelectors.BUBBLE_TEXT);
+        bubbles.forEach(bubble => {
+            if (bubble.dataset.msDecrypted) {
+                bubble.querySelectorAll('.ms-injected-container').forEach(el => el.remove());
+                MessageScanner.restoreOriginalContent(bubble);
+                
+                delete bubble.dataset.msDecrypted;
+                delete bubble.dataset.msOriginal;
+                delete bubble.dataset.msDecryptedText;
+                delete bubble.dataset.msShowDecrypted;
+                delete bubble.dataset.msShowError;
+            }
+        });
+    },
+
     // Extract text safely, handling VK/MAX truncation via URL wrappers
     extractFullText: (bubble) => {
-        // VK and MAX might wrap long links in an <a> tag and visually truncate the innerText.
         const link = bubble.querySelector('a');
-        if (link) {
+        if (link && !link.classList.contains('im-mess__more') && !link.classList.contains('PostTextMore') && !link.classList.contains('pi_more')) {
             try {
                 const urlStr = link.getAttribute('href'); 
-                // In VK mobile, clicking external link redirects to away.php
                 if (urlStr && urlStr.includes('away.php')) {
                     const url = new URL(link.href, window.location.origin);
                     if (url.searchParams.has('to')) {
-                        return decodeURIComponent(url.searchParams.get('to')); // This gives us back the full spoofed URL
+                        return decodeURIComponent(url.searchParams.get('to'));
                     }
                 } else if (urlStr && urlStr.startsWith('http')) {
-                    // For MAX or other cases, the href is intact even if text is truncated
                     return urlStr;
                 }
             } catch (e) {
-                // Ignore parse errors, fallback to innerText
             }
         }
-        return bubble.innerText;
+        return MessageScanner.getTextWithNewlines(bubble).trim();
     },
 
     renderDecrypted: (bubble, result, originalText) => {
-        bubble.innerHTML = '';
+        MessageScanner.hideOriginalContent(bubble);
+        bubble.querySelectorAll('.ms-injected-container').forEach(el => el.remove());
 
         bubble.dataset.msOriginal = originalText;
         bubble.dataset.msDecryptedText = result.content;
         bubble.dataset.msShowDecrypted = 'true';
 
         const container = document.createElement('div');
-        container.className = 'ms-decrypted-container';
+        container.className = 'ms-injected-container ms-decrypted-container';
         container.style.cssText = `position: relative; padding: 2px 0;`;
 
         const lockIcon = document.createElement('span');
@@ -293,10 +390,13 @@ const MessageScanner = {
 
     // Render pending decryption status
     renderPending: (bubble, originalText) => {
+        MessageScanner.hideOriginalContent(bubble);
+        bubble.querySelectorAll('.ms-injected-container').forEach(el => el.remove());
+        
         bubble.dataset.msOriginal = originalText;
 
         const container = document.createElement('div');
-        container.className = 'ms-pending-container';
+        container.className = 'ms-injected-container ms-pending-container';
         container.style.cssText = `
             position: relative;
             padding: 6px 10px;
@@ -312,17 +412,19 @@ const MessageScanner = {
             </div>
         `;
 
-        bubble.innerHTML = '';
         bubble.appendChild(container);
     },
 
     // Render failed decryption status
     renderFailed: (bubble, originalText) => {
+        MessageScanner.hideOriginalContent(bubble);
+        bubble.querySelectorAll('.ms-injected-container').forEach(el => el.remove());
+        
         bubble.dataset.msOriginal = originalText;
         bubble.dataset.msDecrypted = 'failed';
 
         const container = document.createElement('div');
-        container.className = 'ms-failed-container';
+        container.className = 'ms-injected-container ms-failed-container';
         container.style.cssText = `
             position: relative;
             padding: 6px 10px;
@@ -347,7 +449,6 @@ const MessageScanner = {
             MessageScanner.toggleFailedView(bubble);
         };
 
-        bubble.innerHTML = '';
         bubble.appendChild(container);
     },
 
@@ -355,53 +456,49 @@ const MessageScanner = {
     toggleFailedView: (bubble) => {
         const isShowingError = bubble.dataset.msShowError !== 'false';
         const originalText = bubble.dataset.msOriginal;
+        const container = bubble.querySelector('.ms-failed-container');
+        if (!container) return;
 
         if (isShowingError) {
-            // Show original encrypted text
-            bubble.innerHTML = '';
-
-            const container = document.createElement('div');
-            container.style.cssText = `position: relative;`;
-
-            const textDiv = document.createElement('div');
-            textDiv.style.cssText = `
-                font-size: 0.8em;
-                opacity: 0.6;
-                word-break: break-all;
-                color: #888;
-                max-height: 150px;
-                overflow-y: auto;
-                padding-right: 20px;
+            container.innerHTML = `
+                <div style="position: relative;">
+                    <div style="font-size: 0.8em; opacity: 0.6; word-break: break-all; color: #888; max-height: 150px; overflow-y: auto; padding-right: 20px;">
+                        ${originalText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}
+                    </div>
+                    <span class="ms-failed-close" style="position: absolute; top: 0; right: 0; font-size: 10px; color: #666; cursor: pointer; padding: 2px 4px; border-radius: 3px;" title="Скрыть оригинал">✕</span>
+                </div>
             `;
-            textDiv.textContent = originalText;
-
-            const closeBtn = document.createElement('span');
-            closeBtn.textContent = '✕';
-            closeBtn.style.cssText = `
-                position: absolute;
-                top: 0;
-                right: 0;
-                font-size: 10px;
-                color: #666;
-                cursor: pointer;
-                padding: 2px 4px;
-                border-radius: 3px;
-            `;
-            closeBtn.title = 'Скрыть оригинал';
+            
+            const closeBtn = container.querySelector('.ms-failed-close');
             closeBtn.onmouseenter = () => closeBtn.style.background = 'rgba(255,255,255,0.1)';
             closeBtn.onmouseleave = () => closeBtn.style.background = 'transparent';
+            
+            // Backup the old onclick
+            if (!container.dataset.originalOnclick) {
+                container.dataset.originalOnclick = "true";
+                container._originalOnclick = container.onclick;
+            }
+            container.onclick = null;
+            
             closeBtn.onclick = (e) => {
                 e.stopPropagation();
                 MessageScanner.toggleFailedView(bubble);
             };
-
-            container.appendChild(textDiv);
-            container.appendChild(closeBtn);
-            bubble.appendChild(container);
             bubble.dataset.msShowError = 'false';
         } else {
-            // Show error message again
-            MessageScanner.renderFailed(bubble, originalText);
+            // Restore original state
+            container.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 12px;">🔐</span>
+                    <span style="color: #f88; font-size: 11px; flex: 1;">Зашифровано (неверный ключ?)</span>
+                    <span style="font-size: 9px; color: #666; text-decoration: underline;">показать</span>
+                </div>
+            `;
+            
+            if (container.dataset.originalOnclick) {
+                container.onclick = container._originalOnclick;
+            }
+            
             bubble.dataset.msShowError = 'true';
         }
     },

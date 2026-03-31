@@ -263,17 +263,26 @@ const CryptoEngine = {
     extractPayload: (text, preset) => {
         if (!preset || !preset.detect) return null;
 
-        // Normalize line endings (fixes multipart extraction from DOM innerText)
-        const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        // Clean text and remove zero-width chars injected by some platforms
+        const cleanText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+        const fixRegex = (regex) => {
+            const src = typeof regex === 'string' ? regex : regex.source;
+            if (src.endsWith('([^\\n]+)') || src.endsWith('([^"]+)')) {
+                const prefix = src.replace(/\(\[\^\\n\]\+\)$/, '').replace(/\(\[\^"\]\+\)$/, '');
+                return new RegExp(prefix + '([A-Za-z0-9%_\\-\\n\\r]+)');
+            }
+            return typeof regex === 'string' ? new RegExp(regex) : regex;
+        };
 
         // --- Multipart extraction ---
         if (preset.multipart && preset.extractMulti && preset.parts >= 2) {
             const parts = [];
             for (let i = 0; i < preset.extractMulti.length; i++) {
-                const regex = preset.extractMulti[i];
-                const match = normalized.match(regex);
+                const regex = fixRegex(preset.extractMulti[i]);
+                const match = cleanText.match(regex);
                 if (match && match[1]) {
-                    parts.push(match[1]);
+                    parts.push(match[1].replace(/[\s\n\r]+/g, ''));
                 }
             }
             if (parts.length === preset.parts) {
@@ -283,10 +292,9 @@ const CryptoEngine = {
 
         // --- Single-part extraction with custom regex ---
         if (preset.extract) {
-            const regex = typeof preset.extract === 'string'
-                ? new RegExp(preset.extract) : preset.extract;
-            const match = normalized.match(regex);
-            if (match && match[1]) return match[1];
+            const regex = fixRegex(preset.extract);
+            const match = cleanText.match(regex);
+            if (match && match[1]) return match[1].replace(/[\s\n\r]+/g, '');
         }
 
         // --- URL parameter extraction ---
@@ -295,17 +303,17 @@ const CryptoEngine = {
             const escaped = paramName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             let patterns;
             if (paramName.endsWith('=') || paramName.endsWith('-') || paramName.endsWith('_')) {
-                patterns = [new RegExp(escaped + '([^&\\s#]+)')];
+                patterns = [new RegExp(escaped + '([A-Za-z0-9%_\\-\\n\\r]+)')];
             } else {
                 patterns = [
-                    new RegExp(escaped + '=([^&\\s#]+)'),
-                    new RegExp(escaped + '-([^&\\s#]+)'),
-                    new RegExp(escaped + '([^&\\s#=]+)')
+                    new RegExp(escaped + '=([A-Za-z0-9%_\\-\\n\\r]+)'),
+                    new RegExp(escaped + '-([A-Za-z0-9%_\\-\\n\\r]+)'),
+                    new RegExp(escaped + '([A-Za-z0-9%_\\-\\n\\r]+)')
                 ];
             }
             for (const p of patterns) {
-                const match = normalized.match(p);
-                if (match && match[1]) return match[1];
+                const match = cleanText.match(p);
+                if (match && match[1]) return match[1].replace(/[\s\n\r]+/g, '');
             }
         }
         return null;
