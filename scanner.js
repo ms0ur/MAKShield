@@ -23,6 +23,48 @@ const MessageScanner = {
         return false;
     },
 
+    // Extract shared secret derived logic
+    tryDeriveSecret: async (chatId, fingerprintForToast) => {
+        try {
+            const ecdhData = await ShieldStorage.getECDHData();
+            const keyMode = await ShieldStorage.getKeyMode(chatId);
+
+            if (keyMode === 'auto' && ecdhData && ecdhData.myPrivateKey && ecdhData.peerPublicKey) {
+                const privateKey = await ECDHEngine.importPrivateKey(ecdhData.myPrivateKey);
+                const peerPublicKey = await ECDHEngine.importPublicKey(ecdhData.peerPublicKey);
+
+                if (privateKey && peerPublicKey) {
+                    const sharedSecret = await ECDHEngine.deriveSharedSecret(privateKey, peerPublicKey);
+                    const currentPassword = await ShieldStorage.getChatPassword();
+
+                    // Only update and toast if it's newly derived
+                    if (sharedSecret && sharedSecret !== currentPassword) {
+                        await ShieldStorage.setChatPassword(sharedSecret);
+                        await ShieldStorage.setKeyMode('auto');
+                        ShieldState.isActive = true;
+
+                        if (typeof ShieldUI !== 'undefined') {
+                            ShieldUI.updateIndicator(true);
+                            ShieldUI.updateEmojiButton(true);
+                            ShieldUI.updateToggleButton(true);
+                            ShieldUI.updateKeyModeDisplay();
+                            ShieldUI.toast(`🔐 Ключи согласованы! [${fingerprintForToast || 'OK'}]`);
+                        }
+
+                        // Re-scan with new key
+                        setTimeout(() => {
+                            if (typeof scanMessages === 'function') {
+                                scanMessages();
+                            }
+                        }, 500);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('[Shield] tryDeriveSecret Error:', err);
+        }
+    },
+
     // Handle ECDH key exchange message
     handleECDHMessage: async (payload, bubble) => {
         try {
@@ -38,12 +80,16 @@ const MessageScanner = {
             // Check if this is OUR own key we sent
             if (ecdhData && ecdhData.myPublicKey === peerPublicKeyB64) {
                 MessageScanner.renderECDHMessage(bubble, 'sent', peerPublicKeyB64);
+                // Even though it's our own key, we might now have both keys (if peer sent theirs earlier).
+                await MessageScanner.tryDeriveSecret(chatId, null);
                 return true;
             }
 
             if (ecdhData && ecdhData.peerPublicKey === peerPublicKeyB64) {
                 // Already have this key, just show indicator
                 MessageScanner.renderECDHMessage(bubble, 'received', peerPublicKeyB64);
+                // Ensure derivation is done just in case
+                await MessageScanner.tryDeriveSecret(chatId, null);
                 return true;
             }
 
@@ -53,46 +99,18 @@ const MessageScanner = {
             // Generate fingerprint for display
             const fingerprint = await ECDHEngine.generateFingerprint(peerPublicKeyB64);
 
-            // Fetch latest data and keyMode
-            const updatedEcdhData = await ShieldStorage.getECDHData();
             const keyMode = await ShieldStorage.getKeyMode(chatId);
 
-            // Only derive if we are in AUTO mode
-            if (keyMode === 'auto' && updatedEcdhData && updatedEcdhData.myPrivateKey && updatedEcdhData.peerPublicKey) {
-                // We have both keys, derive shared secret
-                const privateKey = await ECDHEngine.importPrivateKey(updatedEcdhData.myPrivateKey);
-                const peerPublicKey = await ECDHEngine.importPublicKey(updatedEcdhData.peerPublicKey);
-
-                if (privateKey && peerPublicKey) {
-                    const sharedSecret = await ECDHEngine.deriveSharedSecret(privateKey, peerPublicKey);
-
-                    if (sharedSecret) {
-                        // Set shared secret as chat password
-                        await ShieldStorage.setChatPassword(sharedSecret);
-                        await ShieldStorage.setKeyMode('auto');
-
-                        ShieldState.isActive = true;
-                        if (typeof ShieldUI !== 'undefined') {
-                            ShieldUI.updateIndicator(true);
-                            ShieldUI.updateEmojiButton(true);
-                            ShieldUI.updateToggleButton(true);
-                            ShieldUI.updateKeyModeDisplay();
-                            ShieldUI.toast(`🔐 Ключи согласованы! [${fingerprint}]`);
-                        }
-
-                        // Re-scan messages with new key
-                        setTimeout(() => {
-                            if (typeof scanMessages === 'function') {
-                                scanMessages();
-                            }
-                        }, 500);
+            if (keyMode === 'auto') {
+                const updatedEcdhData = await ShieldStorage.getECDHData();
+                if (updatedEcdhData && updatedEcdhData.myPrivateKey && updatedEcdhData.peerPublicKey) {
+                    await MessageScanner.tryDeriveSecret(chatId, fingerprint);
+                } else {
+                    // We received peer's key but haven't sent ours yet
+                    if (typeof ShieldUI !== 'undefined') {
+                        ShieldUI.toast(`🔑 Получен ключ [${fingerprint}]. Отправьте свой!`);
+                        ShieldUI.updateKeyModeDisplay();
                     }
-                }
-            } else if (keyMode === 'auto') {
-                // We received peer's key but haven't sent ours yet
-                if (typeof ShieldUI !== 'undefined') {
-                    ShieldUI.toast(`🔑 Получен ключ [${fingerprint}]. Отправьте свой!`);
-                    ShieldUI.updateKeyModeDisplay();
                 }
             }
 

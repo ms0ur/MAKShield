@@ -160,6 +160,19 @@ const CryptoEngine = {
         );
     },
 
+    // Helper to compress bytes using Native Web API
+    compressData: async (dataBuffer) => {
+        if (typeof CompressionStream === 'undefined') return { bytes: dataBuffer, compressed: false };
+        try {
+            const stream = new Response(dataBuffer).body.pipeThrough(new CompressionStream('deflate'));
+            const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+            return { bytes, compressed: true };
+        } catch (e) {
+            console.warn('[Shield] Compression failed, falling back:', e);
+            return { bytes: dataBuffer, compressed: false };
+        }
+    },
+
     // ---- Encrypt plaintext → spoofed message ----
     encrypt: async (text, password, spoofPreset = null) => {
         try {
@@ -167,18 +180,28 @@ const CryptoEngine = {
             const iv = crypto.getRandomValues(new Uint8Array(12));
 
             const key = await CryptoEngine.deriveKey(password, salt);
+            
+            const plainBytes = CryptoEngine.str2buf(text);
+            const compResult = await CryptoEngine.compressData(plainBytes);
+
             const encrypted = await crypto.subtle.encrypt(
                 { name: 'AES-GCM', iv },
                 key,
-                CryptoEngine.str2buf(text)
+                compResult.bytes
             );
 
-            const payload = JSON.stringify({
+            const payloadPkg = {
                 v: 3,
                 s: CryptoEngine.toB64(salt),
                 iv: CryptoEngine.toB64(iv),
                 d: CryptoEngine.toB64(encrypted)
-            });
+            };
+
+            if (compResult.compressed) {
+                payloadPkg.c = 1;
+            }
+
+            const payload = JSON.stringify(payloadPkg);
 
             const safePayload = encodeURIComponent(
                 CryptoEngine.toB64(CryptoEngine.str2buf(payload))
@@ -222,7 +245,17 @@ const CryptoEngine = {
                 { name: 'AES-GCM', iv }, key, data
             );
 
-            return { type: 'text', content: CryptoEngine.buf2str(decryptedBuf) };
+            let plainBytes = new Uint8Array(decryptedBuf);
+            if (pkg.c === 1 && typeof DecompressionStream !== 'undefined') {
+                try {
+                    const stream = new Response(plainBytes).body.pipeThrough(new DecompressionStream('deflate'));
+                    plainBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+                } catch (e) {
+                    console.error('[Shield] Decompression error:', e);
+                }
+            }
+
+            return { type: 'text', content: CryptoEngine.buf2str(plainBytes) };
         } catch (e) {
             console.error('[Shield] Decrypt Error:', e);
             return null;

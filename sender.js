@@ -77,6 +77,14 @@ const SendHandler = {
                 return;
             }
 
+            // Enforce VK message limit to prevent the messenger from splitting the message
+            // which irreversibly corrupts the encrypted payload
+            if (encryptedUrl.length > 4000) {
+                ShieldUI.toast(`Слишком длинное сообщение (${encryptedUrl.length} симв, лимит 4000). Разбиение ВКонтакте сломает шифрование. Сократите исходный текст!`, 'error');
+                SendHandler.isHandling = false;
+                return;
+            }
+
             SendHandler.insertIntoEditor(editor, encryptedUrl);
 
             // Notify the app that editor content changed

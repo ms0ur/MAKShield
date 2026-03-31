@@ -18,6 +18,7 @@ MAKShield is a browser extension that adds end-to-end encryption to **MAX Messen
 ### Features
 
 - 🔐 **AES-256-GCM Encryption** — Military-grade authenticated encryption via Web Crypto API
+- 🗜️ **Payload Compression** — Pre-encryption Deflate compression via Native API for huge logs
 - 🔑 **PBKDF2 Key Derivation** — 600,000 iterations (OWASP 2023 recommendation)
 - 🔗 **HKDF Key Expansion** — Domain-separated key derivation for maximum security
 - 🔄 **ECDH Key Exchange** — Automatic key exchange using P-384 curve (192-bit security)
@@ -94,6 +95,7 @@ MAKShield is a browser extension that adds end-to-end encryption to **MAX Messen
 | Feature | Implementation |
 |---------|----------------|
 | Encryption | AES-256-GCM (authenticated) |
+| Compression | Native CompressionStream API ('deflate') |
 | Key Derivation | PBKDF2-SHA256 (600,000 iterations) |
 | Key Expansion | HKDF-SHA256 (domain separation) |
 | Key Exchange | ECDH P-384 (secp384r1, 192-bit security) |
@@ -111,10 +113,11 @@ MAKShield is a browser extension that adds end-to-end encryption to **MAX Messen
 | `https://vk.com/*`, `https://vk.ru/*` | Access VKontakte (desktop) |
 | `https://m.vk.com/*`, `https://m.vk.ru/*` | Access VKontakte (mobile web) |
 
-### ⚠️ Mobile Limitations
+### ⚠️ Limitations & Mobile Constraints
 
 | Limitation | Details |
 |------------|---------|
+| **VK 4096 Char Limit**| VK restricts messages to 4096 chars. MAKShield proactively compresses data, but blocks sending if the limit is exceeded to prevent irreversible payload splitting. |
 | **Panel position** | The floating MAKShield panel may overlap UI elements on small screens. It can be minimized by tapping the logo. |
 | **Keyboard interaction** | `Enter` key interception may not work on mobile virtual keyboards. Use the send button instead. |
 | **Performance** | PBKDF2 with 600K iterations is slower on mobile CPUs. First encryption/decryption for a chat may take 1-3 seconds. |
@@ -162,6 +165,7 @@ MAKShield — расширение браузера, добавляющее ск
 ### Возможности
 
 - 🔐 **AES-256-GCM** — Аутентифицированное шифрование через Web Crypto API
+- 🗜️ **Сжатие данных** — Предварительное ужимание длинных текстов алгоритмом Deflate
 - 🔑 **PBKDF2** — 600 000 итераций (рекомендация OWASP 2023)
 - 🔗 **HKDF** — Доменно-разделённая деривация ключей
 - 🔄 **ECDH P-384** — Автоматический обмен ключами (192-бит безопасности)
@@ -258,6 +262,7 @@ Kiwi Browser — это браузер на базе Chromium для Android с 
 | Функция | Реализация |
 |---------|------------|
 | Шифрование | AES-256-GCM (аутентифицированное) |
+| Сжатие текста | Native CompressionStream API ('deflate') |
 | Деривация ключей | PBKDF2-SHA256 (600 000 итераций) |
 | Расширение ключей | HKDF-SHA256 (доменное разделение) |
 | Обмен ключами | ECDH P-384 (secp384r1, 192-бит безопасности) |
@@ -275,10 +280,11 @@ Kiwi Browser — это браузер на базе Chromium для Android с 
 | `https://vk.com/*`, `https://vk.ru/*` | Доступ к ВКонтакте (десктоп) |
 | `https://m.vk.com/*`, `https://m.vk.ru/*` | Доступ к ВКонтакте (мобильный веб) |
 
-### ⚠️ Ограничения на мобильных устройствах
+### ⚠️ Известные ограничения
 
 | Ограничение | Подробности |
 |-------------|-------------|
+| **Лимит 4096 символов**| ВКонтакте режет сообщения длиннее 4096 символов. MAKShield сжимает текст перед отправкой в 2-4 раза, но если финальный вес всё равно превышен, отправка будет заблокирована для защиты от поломки Base64. |
 | **Положение панели** | Плавающая панель MAKShield может перекрывать элементы интерфейса на маленьких экранах. Сверните её нажатием на логотип. |
 | **Клавиатура** | Перехват клавиши `Enter` может не работать с виртуальной клавиатурой. Используйте кнопку отправки. |
 | **Производительность** | PBKDF2 с 600K итерациями медленнее на мобильных CPU. Первое шифрование может занять 1-3 секунды. |
